@@ -13,9 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import Build_gradle.Extras.id
-import Build_gradle.Extras.tags
-import Build_gradle.Extras.url
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Instant
 import java.util.*
@@ -31,6 +28,7 @@ plugins {
     id("com.gradle.plugin-publish") version "0.10.1"
     id("com.dorkbox.Licensing") version "1.4"
     id("com.dorkbox.VersionUpdate") version "1.4.1"
+    id("com.dorkbox.GradleUtils") version "1.0"
 
     kotlin("jvm") version "1.3.21"
 }
@@ -39,7 +37,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.0"
+    const val version = "1.1"
 
     // set as project.ext
     const val name = "Gradle Utils"

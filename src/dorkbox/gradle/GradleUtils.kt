@@ -16,7 +16,6 @@
 package dorkbox.gradle
 
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
-import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
@@ -52,17 +51,6 @@ class GradleUtils : Plugin<Project> {
 
             // optional parameters
             checkForGradleUpdate = false
-        }
-
-        project.afterEvaluate {
-            // just make sure that we have a version defined.
-            val version = project.version.toString()
-            project.version.toString()
-
-            if (version.isBlank() || version == Project.DEFAULT_VERSION) {
-                // no version info specified, but version task was called
-                throw GradleException("Project version information is unset. Please set via `project.version = '1.0.0'`")
-            }
         }
     }
 }
