@@ -24,7 +24,10 @@ import org.gradle.api.Project
  * For managing (what should be common sense) gradle tasks, such as updating gradle and dependencies
  */
 class GradleUtils : Plugin<Project> {
+    private lateinit var propertyMappingExtension: LoadPropertyFile
+
     override fun apply(project: Project) {
+        propertyMappingExtension = project.extensions.create("GradleUtils", LoadPropertyFile::class.java, project)
 
         project.tasks.create("autoUpdateGradle", GradleUpdateTask::class.java).apply {
             group = "gradle"
