@@ -45,7 +45,8 @@ object Extras {
     val tags = listOf("gradle", "update", "dependencies", "dependency management")
     val buildDate = Instant.now().toString()
 
-    val JAVA_VERSION = JavaVersion.VERSION_1_8.toString()
+    val JAVA_VERSION = JavaVersion.VERSION_1_8
+    val KOTLIN_VERSION = JavaVersion.VERSION_1_8
 }
 
 ///////////////////////////////
@@ -92,16 +93,18 @@ dependencies {
     compile("org.json:json:20180813")
 }
 
-tasks.withType<JavaCompile> {
-    options.encoding = "UTF-8"
-    options.isIncremental = true
-
+java {
     sourceCompatibility = Extras.JAVA_VERSION
     targetCompatibility = Extras.JAVA_VERSION
 }
 
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+    options.isIncremental = true
+}
+
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = Extras.JAVA_VERSION
+    kotlinOptions.jvmTarget = Extras.KOTLIN_VERSION.toString()
 }
 
 tasks.withType<Jar> {
