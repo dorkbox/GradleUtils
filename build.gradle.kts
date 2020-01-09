@@ -25,17 +25,17 @@ plugins {
     id("com.gradle.plugin-publish") version "0.10.1"
 
     id("com.dorkbox.Licensing") version "1.4"
-    id("com.dorkbox.VersionUpdate") version "1.4.1"
-    id("com.dorkbox.GradleUtils") version "1.2"
+    id("com.dorkbox.VersionUpdate") version "1.6.1"
+    id("com.dorkbox.GradleUtils") version "1.2.7"
 
-    kotlin("jvm") version "1.3.21"
+    kotlin("jvm") version "1.3.61"
 }
 
 object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.2"
+    const val version = "1.3"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -83,14 +83,14 @@ repositories {
 
 dependencies {
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
-    compileOnly("org.jetbrains.kotlin:kotlin-reflect")
-    compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // setup checking for the latest version of a plugin or dependency
-    compile("com.github.ben-manes:gradle-versions-plugin:0.21.0")
+    implementation("com.github.ben-manes:gradle-versions-plugin:0.27.0")
 
-    compile("org.json:json:20180813")
+    implementation("org.json:json:20180813")
 }
 
 java {
