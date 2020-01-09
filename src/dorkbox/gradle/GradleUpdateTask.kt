@@ -16,6 +16,7 @@
 package dorkbox.gradle
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.wrapper.Wrapper
 import org.gradle.util.GradleVersion
 import org.json.JSONObject
@@ -23,47 +24,42 @@ import java.net.URL
 
 open class
 GradleUpdateTask : DefaultTask() {
+    @Volatile var foundGradleVersion : String? = "0.0"
+    private val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
+
     init {
         outputs.upToDateWhen { false }
         outputs.cacheIf { false }
+        description = "Automatically update GRADLE to the latest version"
 
-        project.afterEvaluate {
-            // always make sure this task when specified. ALWAYS skip for other tasks, Never skip for us.
-            // This is a little bit of a PITA, because of how gradle configures, then runs tasks...
+        wrapper.apply {
+            group = "gradle"
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
 
-            if (project.gradle.startParameter.taskNames.contains(this.name)) {
-                val releaseText = URL("https://services.gradle.org/versions/current").readText()
-                val foundGradleVersion = JSONObject(releaseText)["version"] as String?
-
-                if (foundGradleVersion.isNullOrEmpty()) {
-                    println("\tUnable to detect New Gradle Version. Output json: $releaseText")
-                }
-                else {
-                    val current = GradleVersion.current().version
-
-                    if (current == foundGradleVersion) {
-                        println("\tGradle is already latest version '$foundGradleVersion'")
-                    } else {
-                        println("\tDetected new Gradle Version: '$foundGradleVersion', updating from $current")
-
-                        val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
-                        wrapper.apply {
-                            group = "gradle"
-                            outputs.upToDateWhen { false }
-                            outputs.cacheIf { false }
-
-                            gradleVersion = foundGradleVersion
-                            distributionUrl = distributionUrl.replace("bin", "all")
-                        }
-
-                        finalizedBy(wrapper)
-                    }
-                }
-            }
+            gradleVersion = foundGradleVersion
+            distributionUrl = distributionUrl.replace("bin", "all")
         }
+
+        finalizedBy(wrapper)
     }
 
-    override fun getDescription(): String {
-        return "Automatically updates GRADLE to the latest version"
+    @TaskAction
+    fun run() {
+        val releaseText = URL("https://services.gradle.org/versions/current").readText()
+        foundGradleVersion = JSONObject(releaseText)["version"] as String?
+
+        if (foundGradleVersion.isNullOrEmpty()) {
+            println("\tUnable to detect New Gradle Version. Output json: $releaseText")
+        }
+        else {
+            val current = GradleVersion.current().version
+
+            if (current == foundGradleVersion) {
+                println("\tGradle is already latest version '$foundGradleVersion'")
+            } else {
+                println("\tDetected new Gradle Version: '$foundGradleVersion', updating from $current")
+            }
+        }
     }
 }

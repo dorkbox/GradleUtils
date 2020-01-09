@@ -1,12 +1,13 @@
 package dorkbox.gradle
 
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.full.declaredMemberProperties
 
-open class LoadPropertyFile(private val project: Project) {
+open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object.
      */
@@ -35,6 +36,26 @@ open class LoadPropertyFile(private val project: Project) {
                     project.extensions.extraProperties.set(k, v)
                 }
             }}
+        }
+    }
+
+    /**
+     * Validates the minimum version of gradle supported
+     */
+    fun minVersion(version: String) {
+        val compared = org.gradle.util.GradleVersion.current().compareTo(org.gradle.util.GradleVersion.version(version))
+        if (compared == -1) {
+            throw GradleException("This project requires Gradle $version or higher.")
+        }
+    }
+
+    /**
+     * Validates the maximum version of gradle supported
+     */
+    fun maxVersion(version: String) {
+        val compared = org.gradle.util.GradleVersion.current().compareTo(org.gradle.util.GradleVersion.version(version))
+        if (compared == 1) {
+            throw GradleException("This project requires Gradle $version or lower.")
         }
     }
 }
