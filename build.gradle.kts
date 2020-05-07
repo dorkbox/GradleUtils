@@ -22,13 +22,13 @@ plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "0.10.1"
+    id("com.gradle.plugin-publish") version "0.11.0"
 
-    id("com.dorkbox.Licensing") version "1.4.2"
+    id("com.dorkbox.Licensing") version "1.3"
     id("com.dorkbox.VersionUpdate") version "1.6.1"
     id("com.dorkbox.GradleUtils") version "1.3"
 
-    kotlin("jvm") version "1.3.61"
+    kotlin("jvm") version "1.3.72"
 }
 
 object Extras {
@@ -88,7 +88,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // setup checking for the latest version of a plugin or dependency
-    implementation("com.github.ben-manes:gradle-versions-plugin:0.27.0")
+    implementation("com.github.ben-manes:gradle-versions-plugin:0.28.0")
 
     implementation("org.json:json:20180813")
 }
