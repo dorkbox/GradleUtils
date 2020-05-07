@@ -1,5 +1,5 @@
  - GradleUtils - 
    https://git.dorkbox.com/dorkbox/GradleUtils
-   Copyright 2019 - The Apache Software License, Version 2.0
+   Copyright 2020 - The Apache Software License, Version 2.0
      Dorkbox LLC
    Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
