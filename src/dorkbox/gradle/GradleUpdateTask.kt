@@ -32,16 +32,20 @@ GradleUpdateTask : DefaultTask() {
         outputs.cacheIf { false }
         description = "Automatically update GRADLE to the latest version"
 
-        wrapper.apply {
-            group = "gradle"
-            outputs.upToDateWhen { false }
-            outputs.cacheIf { false }
+        if (foundGradleVersion != "0.0") {
+            wrapper.apply {
+                group = "gradle"
+                outputs.upToDateWhen { false }
+                outputs.cacheIf { false }
 
-            gradleVersion = foundGradleVersion
-            distributionUrl = distributionUrl.replace("bin", "all")
+                gradleVersion = foundGradleVersion
+                distributionUrl = distributionUrl.replace("bin", "all")
+            }
+
+            finalizedBy(wrapper)
+        } else {
+            println("\tUnable to detect New Gradle Version.")
         }
-
-        finalizedBy(wrapper)
     }
 
     @TaskAction
