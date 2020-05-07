@@ -2,6 +2,9 @@ package dorkbox.gradle
 
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.ResolvedArtifact
+import org.gradle.api.artifacts.ResolvedDependency
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
@@ -56,6 +59,44 @@ open class StaticMethodsAndTools(private val project: Project) {
         val compared = org.gradle.util.GradleVersion.current().compareTo(org.gradle.util.GradleVersion.version(version))
         if (compared == 1) {
             throw GradleException("This project requires Gradle $version or lower.")
+        }
+    }
+
+    /**
+     * Resolves all child dependencies of the project
+     */
+    fun resolveDependencies(): List<ResolvedArtifact> {
+        val configuration = project.configurations.getByName("default") as Configuration
+
+        val includedDeps = mutableSetOf<ResolvedDependency>()
+        val depsToSearch = LinkedList<ResolvedDependency>()
+        depsToSearch.addAll(configuration.resolvedConfiguration.firstLevelModuleDependencies)
+
+        return includedDeps.flatMap {
+            it.moduleArtifacts
+        }
+    }
+
+
+    /**
+     * Recursively resolves all dependencies of the project
+     */
+    fun resolveAllDependencies(): List<ResolvedArtifact> {
+        val configuration = project.configurations.getByName("default") as Configuration
+
+        val includedDeps = mutableSetOf<ResolvedDependency>()
+        val depsToSearch = LinkedList<ResolvedDependency>()
+        depsToSearch.addAll(configuration.resolvedConfiguration.firstLevelModuleDependencies)
+
+        while (depsToSearch.isNotEmpty()) {
+            val dep = depsToSearch.removeFirst()
+            includedDeps.add(dep)
+
+            depsToSearch.addAll(dep.children)
+        }
+
+        return includedDeps.flatMap {
+            it.moduleArtifacts
         }
     }
 }
