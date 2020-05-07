@@ -26,11 +26,15 @@ open class
 GradleUpdateTask : DefaultTask() {
     @Volatile var foundGradleVersion : String? = "0.0"
     private val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
+    private val releaseText: String
 
     init {
         outputs.upToDateWhen { false }
         outputs.cacheIf { false }
         description = "Automatically update GRADLE to the latest version"
+
+        releaseText = URL("https://services.gradle.org/versions/current").readText()
+        foundGradleVersion = JSONObject(releaseText)["version"] as String?
 
         if (foundGradleVersion != "0.0") {
             wrapper.apply {
@@ -50,9 +54,6 @@ GradleUpdateTask : DefaultTask() {
 
     @TaskAction
     fun run() {
-        val releaseText = URL("https://services.gradle.org/versions/current").readText()
-        foundGradleVersion = JSONObject(releaseText)["version"] as String?
-
         if (foundGradleVersion.isNullOrEmpty()) {
             println("\tUnable to detect New Gradle Version. Output json: $releaseText")
         }
