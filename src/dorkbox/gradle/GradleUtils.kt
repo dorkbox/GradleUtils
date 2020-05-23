@@ -18,6 +18,10 @@ package dorkbox.gradle
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.tasks.SourceSet
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import java.util.*
 
 
 /**
@@ -32,7 +36,7 @@ class GradleUtils : Plugin<Project> {
     override fun apply(project: Project) {
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
 
-        project.tasks.create("autoUpdateGradle", GradleUpdateTask::class.java).apply {
+        project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
             group = "gradle"
         }
 
@@ -60,3 +64,20 @@ class GradleUtils : Plugin<Project> {
         }
     }
 }
+
+
+// Fix defaults for gradle, since it's mildly retarded when it comes to kotlin, so we can have sane sourceset/configuration options
+// from: https://github.com/gradle/kotlin-dsl-samples/blob/201534f53d93660c273e09f768557220d33810a9/buildSrc/src/main/kotlin/build/KotlinPluginExtensions.kt
+val SourceSet.kotlin: SourceDirectorySet
+    get() =
+        (this as org.gradle.api.internal.HasConvention)
+                .convention
+                .getPlugin(KotlinSourceSet::class.java)
+                .kotlin
+
+fun SourceSet.kotlin(action: SourceDirectorySet.() -> Unit) =
+        kotlin.action()
+
+val Project.sourceSets: SortedMap<String, SourceSet>
+    get() = (this.extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer).asMap
+

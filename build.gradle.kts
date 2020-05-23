@@ -26,7 +26,7 @@ plugins {
 
     id("com.dorkbox.Licensing") version "1.3"
     id("com.dorkbox.VersionUpdate") version "1.6.1"
-    id("com.dorkbox.GradleUtils") version "1.4"
+    id("com.dorkbox.GradleUtils") version "1.5"
 
     kotlin("jvm") version "1.3.72"
 }
@@ -35,7 +35,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.4"
+    const val version = "1.5"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -79,6 +79,9 @@ sourceSets {
 
 repositories {
     jcenter()
+    maven {
+        url = uri("https://plugins.gradle.org/m2/")
+    }
 }
 
 dependencies {
@@ -90,6 +93,7 @@ dependencies {
     // setup checking for the latest version of a plugin or dependency
     implementation("com.github.ben-manes:gradle-versions-plugin:0.28.0")
 
+    // for parsing JSON
     implementation("org.json:json:20180813")
 }
 

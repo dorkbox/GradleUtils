@@ -16,6 +16,9 @@
 package dorkbox.gradle
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.wrapper.Wrapper
 import org.gradle.util.GradleVersion
@@ -24,36 +27,17 @@ import java.net.URL
 
 open class
 GradleUpdateTask : DefaultTask() {
-    @Volatile var foundGradleVersion : String? = "0.0"
-    private val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
-    private val releaseText: String
-
     init {
         outputs.upToDateWhen { false }
         outputs.cacheIf { false }
         description = "Automatically update GRADLE to the latest version"
-
-        releaseText = URL("https://services.gradle.org/versions/current").readText()
-        foundGradleVersion = JSONObject(releaseText)["version"] as String?
-
-        if (foundGradleVersion != "0.0") {
-            wrapper.apply {
-                group = "gradle"
-                outputs.upToDateWhen { false }
-                outputs.cacheIf { false }
-
-                gradleVersion = foundGradleVersion
-                distributionUrl = distributionUrl.replace("bin", "all")
-            }
-
-            finalizedBy(wrapper)
-        } else {
-            println("\tUnable to detect New Gradle Version.")
-        }
     }
 
     @TaskAction
     fun run() {
+        val releaseText = URL("https://services.gradle.org/versions/current").readText()
+        val foundGradleVersion = JSONObject(releaseText)["version"] as String?
+
         if (foundGradleVersion.isNullOrEmpty()) {
             println("\tUnable to detect New Gradle Version. Output json: $releaseText")
         }
@@ -64,6 +48,19 @@ GradleUpdateTask : DefaultTask() {
                 println("\tGradle is already latest version '$foundGradleVersion'")
             } else {
                 println("\tDetected new Gradle Version: '$foundGradleVersion', updating from $current")
+
+                val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
+                wrapper.apply {
+                    group = "other"
+                    outputs.upToDateWhen { false }
+                    outputs.cacheIf { false }
+
+                    gradleVersion = foundGradleVersion
+                    distributionUrl = distributionUrl.replace("bin", "all")
+                    distributionType = Wrapper.DistributionType.ALL
+                }
+
+                wrapper.actions[0].execute(wrapper)
             }
         }
     }
