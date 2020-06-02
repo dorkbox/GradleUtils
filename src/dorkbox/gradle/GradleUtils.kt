@@ -34,6 +34,8 @@ class GradleUtils : Plugin<Project> {
     private lateinit var propertyMappingExtension: StaticMethodsAndTools
 
     override fun apply(project: Project) {
+        println("\tGradle ${project.gradle.gradleVersion}")
+
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
 
         project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
