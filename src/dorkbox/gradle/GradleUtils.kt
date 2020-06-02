@@ -65,7 +65,6 @@ class GradleUtils : Plugin<Project> {
     }
 }
 
-
 // Fix defaults for gradle, since it's mildly retarded when it comes to kotlin, so we can have sane sourceset/configuration options
 // from: https://github.com/gradle/kotlin-dsl-samples/blob/201534f53d93660c273e09f768557220d33810a9/buildSrc/src/main/kotlin/build/KotlinPluginExtensions.kt
 val SourceSet.kotlin: SourceDirectorySet
@@ -78,6 +77,6 @@ val SourceSet.kotlin: SourceDirectorySet
 fun SourceSet.kotlin(action: SourceDirectorySet.() -> Unit) =
         kotlin.action()
 
-val Project.sourceSets: SortedMap<String, SourceSet>
+val Project.sourceSetsMap: SortedMap<String, SourceSet>
     get() = (this.extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer).asMap
 
