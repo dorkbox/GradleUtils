@@ -80,6 +80,3 @@ val SourceSet.kotlin: SourceDirectorySet
 fun SourceSet.kotlin(action: SourceDirectorySet.() -> Unit) =
         kotlin.action()
 
-val Project.sourceSetsMap: SortedMap<String, SourceSet>
-    get() = (this.extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer).asMap
-
