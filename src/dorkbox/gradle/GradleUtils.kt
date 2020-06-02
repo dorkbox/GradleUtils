@@ -16,6 +16,7 @@
 package dorkbox.gradle
 
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
+import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.SourceDirectorySet
@@ -34,7 +35,7 @@ class GradleUtils : Plugin<Project> {
     private lateinit var propertyMappingExtension: StaticMethodsAndTools
 
     override fun apply(project: Project) {
-        println("\tGradle ${project.gradle.gradleVersion}")
+        println("\tGradle ${project.gradle.gradleVersion} on Java ${JavaVersion.current()}")
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
 
