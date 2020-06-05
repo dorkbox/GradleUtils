@@ -99,4 +99,37 @@ open class StaticMethodsAndTools(private val project: Project) {
             it.moduleArtifacts
         }
     }
+
+    /**
+     * Fix the compiled output from intellij to be SEPARATE from gradle.
+     */
+    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
+        // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
+        apply(project, "idea")
+
+        // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
+        idea(project) {
+            // https://youtrack.jetbrains.com/issue/IDEA-175172
+            module {
+                val mainDir = File(location)
+                it.outputDir = mainDir
+                it.testOutputDir = mainDir
+            }
+        }
+    }
+
+    private fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
+            project.extensions.configure("idea", configure)
+
+    // required to make sure the plugins are correctly applied. ONLY applying it to the project WILL NOT work.
+    // The plugin must also be applied to the root project
+    private fun apply(project: Project, id: String) {
+        if (project.rootProject.pluginManager.findPlugin(id) == null) {
+            project.rootProject.pluginManager.apply(id)
+        }
+
+        if (project.pluginManager.findPlugin(id) == null) {
+            project.pluginManager.apply(id)
+        }
+    }
 }
