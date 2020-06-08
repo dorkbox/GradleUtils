@@ -1,6 +1,7 @@
 package dorkbox.gradle
 
 import org.gradle.api.GradleException
+import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ResolvedArtifact
@@ -8,11 +9,14 @@ import org.gradle.api.artifacts.ResolvedDependency
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
+import kotlin.reflect.KProperty
+import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.declaredMemberProperties
 
 open class StaticMethodsAndTools(private val project: Project) {
     /**
-     * Maps the property (key/value) pairs of a property file onto the specified target object.
+     * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
+     * project, if have the same name relationship (ie: field name is "version", project method is "setVersion")
      */
     fun load(propertyFile: String, targetObject: Any) {
         val kClass = targetObject::class
@@ -27,18 +31,63 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             val extraProperties = kClass.declaredMemberProperties.filterIsInstance<KMutableProperty<String>>()
+            val assignedExtraProperties = kClass.declaredMemberProperties.filterIsInstance<KProperty<String>>()
+
+            // project functions that can be called for setting properties
+            val propertyFunctions = Project::class.declaredMemberFunctions.filter { it.parameters.size == 2 }
+
+            // THREE possibilities for property registration or assignment
+            // 1) we have MANUALLY defined this property (via the configuration object)
+            // 1) gradleUtil properties loaded first
+            //      -> gradleUtil's adds a function that everyone else (plugin/task) can call to get values from properties
+            // 2) gradleUtil properties loaded last
+            //      -> others add a function that gradleUtil's call to set values from properties
+            // get the module loaded registration functions (if they exist)
+            val loaderFunctions: ArrayList<Plugin<Pair<String, String>>>?
+            if (project.extensions.extraProperties.has("property_loader_functions")) {
+                @Suppress("UNCHECKED_CAST")
+                loaderFunctions = project.extensions.extraProperties["property_loader_functions"] as ArrayList<Plugin<Pair<String, String>>>?
+            } else {
+                loaderFunctions = null
+            }
+
             props.forEach { (k, v) -> run {
                 val key = k as String
                 val value = v as String
 
                 val member = extraProperties.find { it.name == key }
-                if (member != null) {
-                    member.setter.call(kClass.objectInstance, value)
-                }
-                else {
-                    project.extensions.extraProperties.set(k, v)
+                // if we have a property name in our object, we set it.
+                member?.setter?.call(kClass.objectInstance, value)
+
+                // if we have a property name in our PROJECT, we set it
+                // project functions that can be called for setting properties
+                val setterName = "set${key.capitalize()}"
+                propertyFunctions.find { prop -> prop.name == setterName }?.call(project, value)
+
+                // assign this as an "extra property"
+                project.extensions.extraProperties.set(k, v)
+
+                // apply this property to whatever loader functions have been dynamically applied
+                val pair = Pair(key, value)
+                loaderFunctions?.forEach {
+                    it.apply(pair)
                 }
             }}
+
+            // assign target fields to our project (if our project has matching setters)
+            assignedExtraProperties.forEach {
+                val propertyName = it.name
+                val setterName = "set${propertyName.capitalize()}"
+
+                val projectMethod = propertyFunctions.find { prop -> prop.name == setterName }
+                if (projectMethod != null) {
+                    if (it.getter.property.isConst) {
+                        projectMethod.call(project, it.getter.call())
+                    } else {
+                        projectMethod.call(project, it.getter.call(kClass.objectInstance))
+                    }
+                }
+            }
         }
     }
 
