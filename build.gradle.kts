@@ -26,7 +26,7 @@ plugins {
 
     id("com.dorkbox.Licensing") version "1.3"
     id("com.dorkbox.VersionUpdate") version "1.6.1"
-    id("com.dorkbox.GradleUtils") version "1.6"
+    id("com.dorkbox.GradleUtils") version "1.8"
 
     kotlin("jvm") version "1.3.72"
 }
@@ -53,9 +53,7 @@ object Extras {
 /////  assign 'Extras'
 ///////////////////////////////
 GradleUtils.load("$projectDir/../../gradle.properties", Extras)
-description = Extras.description
-group = Extras.group
-version = Extras.version
+GradleUtils.fixIntellijPaths()
 
 
 licensing {
