@@ -22,10 +22,10 @@ plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "0.11.0"
+    id("com.gradle.plugin-publish") version "0.12.0"
 
-    id("com.dorkbox.Licensing") version "1.3"
-    id("com.dorkbox.VersionUpdate") version "1.6.1"
+    id("com.dorkbox.Licensing") version "2.0"
+    id("com.dorkbox.VersionUpdate") version "1.7"
     id("com.dorkbox.GradleUtils") version "1.8"
 
     kotlin("jvm") version "1.3.72"
@@ -89,7 +89,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // setup checking for the latest version of a plugin or dependency
-    implementation("com.github.ben-manes:gradle-versions-plugin:0.28.0")
+    implementation("com.github.ben-manes:gradle-versions-plugin:0.29.0")
 
     // for parsing JSON
     implementation("org.json:json:20180813")
