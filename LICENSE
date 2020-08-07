@@ -1,5 +1,27 @@
- - GradleUtils - 
+ - GradleUtils - Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
+   [The Apache Software License, Version 2.0]
    https://git.dorkbox.com/dorkbox/GradleUtils
-   Copyright 2020 - The Apache Software License, Version 2.0
+   Copyright 2020
      Dorkbox LLC
-   Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
+
+   Extra license information
+     - Kotlin - 
+       [The Apache Software License, Version 2.0]
+       https://github.com/JetBrains/kotlin
+       Copyright 2020
+         JetBrains s.r.o. and Kotlin Programming Language contributors
+       Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
+       See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
+
+     - Gradle Versions Plugin - This plugin provides a task to determine which dependencies have updates
+       [The Apache Software License, Version 2.0]
+       https://github.com/ben-manes/gradle-versions-plugin
+       Copyright 2020
+         Ben Manes
+
+     - JSON in Java - A light-weight language independent data interchange format.
+       [The JSON License]
+       https://github.com/stleary/JSON-java
+       https://www.json.org/json-en.html
+       Copyright 2020
+         JSON.org
