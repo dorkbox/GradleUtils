@@ -16,7 +16,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Instant
 
-println("Gradle ${project.gradle.gradleVersion}")
+gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
+gradle.startParameter.warningMode = WarningMode.All
 
 plugins {
     java
@@ -24,9 +25,9 @@ plugins {
 
     id("com.gradle.plugin-publish") version "0.12.0"
 
-    id("com.dorkbox.Licensing") version "2.0"
-    id("com.dorkbox.VersionUpdate") version "1.7"
-    id("com.dorkbox.GradleUtils") version "1.8"
+    id("com.dorkbox.Licensing") version "2.2"
+    id("com.dorkbox.VersionUpdate") version "2.0"
+    id("com.dorkbox.GradleUtils") version "1.9"
 
     kotlin("jvm") version "1.3.72"
 }
@@ -35,7 +36,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.8"
+    const val version = "1.9"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -58,9 +59,9 @@ GradleUtils.fixIntellijPaths()
 
 licensing {
     license(License.APACHE_2) {
+        description(Extras.description)
         author(Extras.vendor)
         url(Extras.url)
-        note(Extras.description)
     }
 }
 
@@ -92,7 +93,7 @@ dependencies {
     implementation("com.github.ben-manes:gradle-versions-plugin:0.29.0")
 
     // for parsing JSON
-    implementation("org.json:json:20180813")
+    implementation("org.json:json:20200518")
 }
 
 java {
