@@ -3,15 +3,14 @@ package dorkbox.gradle
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.ResolvedArtifact
-import org.gradle.api.artifacts.ResolvedDependency
+import org.gradle.api.plugins.JavaPluginConvention
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.declaredMemberProperties
+
 
 open class StaticMethodsAndTools(private val project: Project) {
     /**
@@ -113,40 +112,45 @@ open class StaticMethodsAndTools(private val project: Project) {
 
     /**
      * Resolves all child dependencies of the project
+     *
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveDependencies(): List<ResolvedArtifact> {
-        val configuration = project.configurations.getByName("default") as Configuration
+    fun resolveDependencies(): List<DependencyScanner.Dependency> {
+        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+        val existingNames = mutableSetOf<String>()
 
-        val includedDeps = mutableSetOf<ResolvedDependency>()
-        val depsToSearch = LinkedList<ResolvedDependency>()
-        depsToSearch.addAll(configuration.resolvedConfiguration.firstLevelModuleDependencies)
+        DependencyScanner.scan(project, "compileClasspath", projectDependencies, existingNames)
+        DependencyScanner.scan(project, "runtimeClasspath", projectDependencies, existingNames)
 
-        return includedDeps.flatMap {
-            it.moduleArtifacts
-        }
+        return projectDependencies
     }
 
+    /**
+     * Resolves all child compile dependencies of the project
+     *
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+     */
+    fun resolveCompileDependencies(): List<DependencyScanner.Dependency> {
+        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+        val existingNames = mutableSetOf<String>()
+
+        DependencyScanner.scan(project, "compileClasspath", projectDependencies, existingNames)
+
+        return projectDependencies
+    }
 
     /**
-     * Recursively resolves all dependencies of the project
+     * Resolves all child compile dependencies of the project
+     *
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveAllDependencies(): List<ResolvedArtifact> {
-        val configuration = project.configurations.getByName("default") as Configuration
+    fun resolveRuntimeDependencies(): List<DependencyScanner.Dependency> {
+        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+        val existingNames = mutableSetOf<String>()
 
-        val includedDeps = mutableSetOf<ResolvedDependency>()
-        val depsToSearch = LinkedList<ResolvedDependency>()
-        depsToSearch.addAll(configuration.resolvedConfiguration.firstLevelModuleDependencies)
+        DependencyScanner.scan(project, "runtimeClasspath", projectDependencies, existingNames)
 
-        while (depsToSearch.isNotEmpty()) {
-            val dep = depsToSearch.removeFirst()
-            includedDeps.add(dep)
-
-            depsToSearch.addAll(dep.children)
-        }
-
-        return includedDeps.flatMap {
-            it.moduleArtifacts
-        }
+        return projectDependencies
     }
 
     /**
@@ -163,6 +167,46 @@ open class StaticMethodsAndTools(private val project: Project) {
                 val mainDir = File(location)
                 it.outputDir = mainDir
                 it.testOutputDir = mainDir
+            }
+        }
+
+        // this has the side-effect of NOT creating the gradle directories....
+
+        // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
+        project.afterEvaluate { prj ->
+            prj.allprojects.forEach { proj ->
+                val javaPlugin: JavaPluginConvention = proj.convention.getPlugin(JavaPluginConvention::class.java)
+                val sourceSets = javaPlugin.sourceSets
+
+                sourceSets.forEach { set ->
+                    set.output.classesDirs.forEach { dir ->
+                        if (!dir.exists()) {
+                            dir.mkdirs()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Configure a default resolution strategy. While not necessary, this is used for enforcing sane project builds
+     */
+    fun defaultResolutionStrategy() {
+        project.configurations.forEach { config ->
+            config.resolutionStrategy {
+                // fail eagerly on version conflict (includes transitive dependencies)
+                // e.g. multiple different versions of the same dependency (group and name are equal)
+                it.failOnVersionConflict()
+
+                // if there is a version we specified, USE THAT VERSION (over transitive versions)
+                it.preferProjectModules()
+
+                // cache dynamic versions for 10 minutes
+                it.cacheDynamicVersionsFor(10 * 60, "seconds")
+
+                // don't cache changing modules at all
+                it.cacheChangingModulesFor(0, "seconds")
             }
         }
     }
