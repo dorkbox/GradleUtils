@@ -1,9 +1,15 @@
 package dorkbox.gradle
 
 import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginConvention
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.tasks.Jar
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
@@ -195,21 +201,126 @@ open class StaticMethodsAndTools(private val project: Project) {
     fun defaultResolutionStrategy() {
         project.configurations.forEach { config ->
             config.resolutionStrategy {
-                // fail eagerly on version conflict (includes transitive dependencies)
-                // e.g. multiple different versions of the same dependency (group and name are equal)
-                it.failOnVersionConflict()
+                it.apply {
+                    // fail eagerly on version conflict (includes transitive dependencies)
+                    // e.g. multiple different versions of the same dependency (group and name are equal)
+                    failOnVersionConflict()
 
-                // if there is a version we specified, USE THAT VERSION (over transitive versions)
-                it.preferProjectModules()
+                    // if there is a version we specified, USE THAT VERSION (over transitive versions)
+                    preferProjectModules()
 
-                // cache dynamic versions for 10 minutes
-                it.cacheDynamicVersionsFor(10 * 60, "seconds")
+                    // cache dynamic versions for 10 minutes
+                    cacheDynamicVersionsFor(10 * 60, "seconds")
 
-                // don't cache changing modules at all
-                it.cacheChangingModulesFor(0, "seconds")
+                    // don't cache changing modules at all
+                    cacheChangingModulesFor(0, "seconds")
+                }
             }
         }
     }
+
+
+    /**
+     * Basic, default compile configurations
+     */
+    fun compileConfiguration(javaVersion: JavaVersion, kotlinActions: (KotlinJvmOptions) -> Unit = {}) {
+        val javaVer = javaVersion.toString()
+
+        project.tasks.withType(JavaCompile::class.java) { task ->
+            task.doFirst {
+                println("\tCompiling classes to Java $javaVersion")
+            }
+            task.options.encoding = "UTF-8"
+
+            task.sourceCompatibility = javaVer
+            task.targetCompatibility = javaVer
+        }
+
+        project.tasks.withType(Jar::class.java) {
+            it.duplicatesStrategy = DuplicatesStrategy.FAIL
+        }
+
+        project.tasks.withType(KotlinCompile::class.java) { task ->
+            task.doFirst {
+                println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+            }
+
+            task.sourceCompatibility = javaVer
+            task.targetCompatibility = javaVer
+
+            task.kotlinOptions.jvmTarget = javaVer
+
+            // default is 1.3
+            task.kotlinOptions.apiVersion = "1.3"
+            task.kotlinOptions.languageVersion = "1.3"
+
+            // see: https://kotlinlang.org/docs/reference/using-gradle.html
+            kotlinActions(task.kotlinOptions)
+        }
+    }
+
+    private var fixedSWT = false
+
+
+    /**
+     * Get the SWT maven ID based on the os/arch. ALSO fix SWT maven configuration IDs
+     *
+     * This is spectacularly frustrating because there aren't "normal" releases of SWT.
+     */
+    fun getSwtMavenId(version: String): String {
+        // SEE: https://repo1.maven.org/maven2/org/eclipse/platform/
+
+        // windows
+        // org.eclipse.swt.win32.win32.x86
+        // org.eclipse.swt.win32.win32.x86_64
+
+        // linux
+        // org.eclipse.swt.gtk.linux.x86
+        // org.eclipse.swt.gtk.linux.x86_64
+
+        // macoxs
+        // org.eclipse.swt.cocoa.macosx.x86_64
+
+        val currentOS = org.gradle.internal.os.OperatingSystem.current()
+        val windowingTk = when {
+            currentOS.isWindows -> "win32"
+            currentOS.isMacOsX  -> "cocoa"
+            else                -> "gtk"
+        }
+
+        val platform = when {
+            currentOS.isWindows -> "win32"
+            currentOS.isMacOsX  -> "macosx"
+            else                -> "linux"
+        }
+
+
+        var arch = System.getProperty("os.arch")
+        arch = when {
+            arch.matches(".*64.*".toRegex()) -> "x86_64"
+            else                             -> "x86"
+        }
+
+        val mavenId = "$windowingTk.$platform.$arch"
+
+        if (!fixedSWT) {
+            fixedSWT = true
+
+            project.configurations.all { config ->
+                config.resolutionStrategy { strat ->
+                    strat.dependencySubstitution { sub ->
+                        // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
+                        // so we replace the dependency, using the osgi platform from the project settings
+                        sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
+                            .with(sub.module("org.eclipse.platform:org.eclipse.swt.$mavenId:$version"))
+                    }
+                }
+            }
+        }
+
+        return "org.eclipse.platform:org.eclipse.swt.$mavenId:$version"
+    }
+
 
     private fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
             project.extensions.configure("idea", configure)
