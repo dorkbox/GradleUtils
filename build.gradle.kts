@@ -36,7 +36,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.9"
+    const val version = "1.10"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -45,9 +45,6 @@ object Extras {
     const val url = "https://git.dorkbox.com/dorkbox/GradleUtils"
     val tags = listOf("gradle", "update", "dependencies", "dependency management")
     val buildDate = Instant.now().toString()
-
-    val JAVA_VERSION = JavaVersion.VERSION_1_8
-    val KOTLIN_VERSION = JavaVersion.VERSION_1_8
 }
 
 ///////////////////////////////
@@ -55,7 +52,8 @@ object Extras {
 ///////////////////////////////
 GradleUtils.load("$projectDir/../../gradle.properties", Extras)
 GradleUtils.fixIntellijPaths()
-
+GradleUtils.defaultResolutionStrategy()
+GradleUtils.compileConfiguration(JavaVersion.VERSION_1_8)
 
 licensing {
     license(License.APACHE_2) {
@@ -94,24 +92,6 @@ dependencies {
 
     // for parsing JSON
     implementation("org.json:json:20200518")
-}
-
-java {
-    sourceCompatibility = Extras.JAVA_VERSION
-    targetCompatibility = Extras.JAVA_VERSION
-}
-
-tasks.withType<JavaCompile> {
-    options.encoding = "UTF-8"
-    options.isIncremental = true
-}
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = Extras.KOTLIN_VERSION.toString()
-}
-
-tasks.withType<Jar> {
-    duplicatesStrategy = DuplicatesStrategy.FAIL
 }
 
 tasks.jar.get().apply {
