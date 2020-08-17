@@ -171,31 +171,37 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
-        // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
-        apply(project, "idea")
+        project.allprojects.forEach { project ->
+            // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
+            apply(project, "idea")
 
-        // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
-        idea(project) {
-            // https://youtrack.jetbrains.com/issue/IDEA-175172
-            module {
-                val mainDir = File(location)
-                it.outputDir = mainDir
-                it.testOutputDir = mainDir
+            // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
+            idea(project) {
+                // https://youtrack.jetbrains.com/issue/IDEA-175172
+                module {
+                    val mainDir = File(location)
+                    it.outputDir = mainDir
+                    it.testOutputDir = mainDir
+
+                    // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                    it.isDownloadJavadoc = false
+                    it.isDownloadSources = true
+                }
             }
-        }
 
-        // this has the side-effect of NOT creating the gradle directories....
+            // this has the side-effect of NOT creating the gradle directories....
 
-        // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
-        project.afterEvaluate { prj ->
-            prj.allprojects.forEach { proj ->
-                val javaPlugin: JavaPluginConvention = proj.convention.getPlugin(JavaPluginConvention::class.java)
-                val sourceSets = javaPlugin.sourceSets
+            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
+            project.afterEvaluate { prj ->
+                prj.allprojects.forEach { proj ->
+                    val javaPlugin: JavaPluginConvention = proj.convention.getPlugin(JavaPluginConvention::class.java)
+                    val sourceSets = javaPlugin.sourceSets
 
-                sourceSets.forEach { set ->
-                    set.output.classesDirs.forEach { dir ->
-                        if (!dir.exists()) {
-                            dir.mkdirs()
+                    sourceSets.forEach { set ->
+                        set.output.classesDirs.forEach { dir ->
+                            if (!dir.exists()) {
+                                dir.mkdirs()
+                            }
                         }
                     }
                 }
@@ -207,21 +213,23 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Configure a default resolution strategy. While not necessary, this is used for enforcing sane project builds
      */
     fun defaultResolutionStrategy() {
-        project.configurations.forEach { config ->
-            config.resolutionStrategy {
-                it.apply {
-                    // fail eagerly on version conflict (includes transitive dependencies)
-                    // e.g. multiple different versions of the same dependency (group and name are equal)
-                    failOnVersionConflict()
+        project.allprojects.forEach { project ->
+            project.configurations.forEach { config ->
+                config.resolutionStrategy {
+                    it.apply {
+                        // fail eagerly on version conflict (includes transitive dependencies)
+                        // e.g. multiple different versions of the same dependency (group and name are equal)
+                        failOnVersionConflict()
 
-                    // if there is a version we specified, USE THAT VERSION (over transitive versions)
-                    preferProjectModules()
+                        // if there is a version we specified, USE THAT VERSION (over transitive versions)
+                        preferProjectModules()
 
-                    // cache dynamic versions for 10 minutes
-                    cacheDynamicVersionsFor(10 * 60, "seconds")
+                        // cache dynamic versions for 10 minutes
+                        cacheDynamicVersionsFor(10 * 60, "seconds")
 
-                    // don't cache changing modules at all
-                    cacheChangingModulesFor(0, "seconds")
+                        // don't cache changing modules at all
+                        cacheChangingModulesFor(0, "seconds")
+                    }
                 }
             }
         }
@@ -234,41 +242,47 @@ open class StaticMethodsAndTools(private val project: Project) {
     fun compileConfiguration(javaVersion: JavaVersion, kotlinActions: (KotlinJvmOptions) -> Unit = {}) {
         val javaVer = javaVersion.toString()
 
-        project.tasks.withType(JavaCompile::class.java) { task ->
-            task.doFirst {
-                println("\tCompiling classes to Java $javaVersion")
+        project.allprojects.forEach { project ->
+            project.tasks.withType(JavaCompile::class.java) { task ->
+                task.doFirst {
+                    println("\tCompiling classes to Java $javaVersion")
+                }
+                task.options.encoding = "UTF-8"
+
+                // -Xlint:deprecation
+                task.options.isDeprecation = true
+
+                // -Xlint:unchecked
+                task.options.compilerArgs.add("-Xlint:unchecked")
+
+
+                task.sourceCompatibility = javaVer
+                task.targetCompatibility = javaVer
             }
-            task.options.encoding = "UTF-8"
 
-            task.sourceCompatibility = javaVer
-            task.targetCompatibility = javaVer
-        }
-
-        project.tasks.withType(Jar::class.java) {
-            it.duplicatesStrategy = DuplicatesStrategy.FAIL
-        }
-
-        project.tasks.withType(KotlinCompile::class.java) { task ->
-            task.doFirst {
-                println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+            project.tasks.withType(Jar::class.java) {
+                it.duplicatesStrategy = DuplicatesStrategy.FAIL
             }
 
-            task.sourceCompatibility = javaVer
-            task.targetCompatibility = javaVer
+            project.tasks.withType(KotlinCompile::class.java) { task ->
+                task.doFirst {
+                    println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+                }
 
-            task.kotlinOptions.jvmTarget = javaVer
+                task.sourceCompatibility = javaVer
+                task.targetCompatibility = javaVer
 
-            // default is 1.3
-            task.kotlinOptions.apiVersion = "1.3"
-            task.kotlinOptions.languageVersion = "1.3"
+                task.kotlinOptions.jvmTarget = javaVer
 
-            // see: https://kotlinlang.org/docs/reference/using-gradle.html
-            kotlinActions(task.kotlinOptions)
+                // default is 1.3
+                task.kotlinOptions.apiVersion = "1.3"
+                task.kotlinOptions.languageVersion = "1.3"
+
+                // see: https://kotlinlang.org/docs/reference/using-gradle.html
+                kotlinActions(task.kotlinOptions)
+            }
         }
     }
-
-    private var fixedSWT = false
-
 
     /**
      * Get the SWT maven ID based on the os/arch. ALSO fix SWT maven configuration IDs
@@ -314,13 +328,15 @@ open class StaticMethodsAndTools(private val project: Project) {
         if (!fixedSWT) {
             fixedSWT = true
 
-            project.configurations.all { config ->
-                config.resolutionStrategy { strat ->
-                    strat.dependencySubstitution { sub ->
-                        // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
-                        // so we replace the dependency, using the osgi platform from the project settings
-                        sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
-                            .with(sub.module("org.eclipse.platform:org.eclipse.swt.$mavenId:$version"))
+            project.allprojects.forEach { project ->
+                project.configurations.all { config ->
+                    config.resolutionStrategy { strat ->
+                        strat.dependencySubstitution { sub ->
+                            // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
+                            // so we replace the dependency, using the osgi platform from the project settings
+                            sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
+                                .with(sub.module("org.eclipse.platform:org.eclipse.swt.$mavenId:$version"))
+                        }
                     }
                 }
             }
@@ -328,7 +344,6 @@ open class StaticMethodsAndTools(private val project: Project) {
 
         return "org.eclipse.platform:org.eclipse.swt.$mavenId:$version"
     }
-
 
     private fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
             project.extensions.configure("idea", configure)
