@@ -19,6 +19,14 @@ import kotlin.reflect.full.declaredMemberProperties
 
 
 open class StaticMethodsAndTools(private val project: Project) {
+    val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
+    val isLinux = org.gradle.internal.os.OperatingSystem.current().isLinux
+    val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
+    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
+
+    private var fixedSWT = false
+
+
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
      * project, if have the same name relationship (ie: field name is "version", project method is "setVersion")
