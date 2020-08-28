@@ -9,6 +9,7 @@ import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
+import org.jetbrains.kotlin.gradle.plugin.KotlinBasePluginWrapper
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.util.*
@@ -242,6 +243,18 @@ open class StaticMethodsAndTools(private val project: Project) {
     fun compileConfiguration(javaVersion: JavaVersion, kotlinActions: (KotlinJvmOptions) -> Unit = {}) {
         val javaVer = javaVersion.toString()
 
+        val kotlinVer: String = try {
+            val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
+            val version = kot?.kotlinPluginVersion ?: "1.3.0"
+
+            // we ONLY care about the major.minor
+            val secondDot = version.indexOf('.', version.indexOf('.')+1)
+            version.substring(0, secondDot)
+        } catch (e: Exception) {
+            // in case we cannot parse it from the plugin, provide a reasonable default
+            "1.3"
+        }
+
         project.allprojects.forEach { project ->
             project.tasks.withType(JavaCompile::class.java) { task ->
                 task.doFirst {
@@ -274,9 +287,9 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                 task.kotlinOptions.jvmTarget = javaVer
 
-                // default is 1.3
-                task.kotlinOptions.apiVersion = "1.3"
-                task.kotlinOptions.languageVersion = "1.3"
+                // default is whatever the version is that we are running, or 1.3 if we cannot figure it out
+                task.kotlinOptions.apiVersion = kotlinVer
+                task.kotlinOptions.languageVersion = kotlinVer
 
                 // see: https://kotlinlang.org/docs/reference/using-gradle.html
                 kotlinActions(task.kotlinOptions)
