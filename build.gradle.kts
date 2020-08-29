@@ -84,8 +84,6 @@ dependencies {
     // compile only, so we dont force kotlin version info into dependencies
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
-    compileOnly("org.jetbrains.kotlin:kotlin-reflect")
-    compileOnly("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // setup checking for the latest version of a plugin or dependency
     implementation("com.github.ben-manes:gradle-versions-plugin:0.29.0")
