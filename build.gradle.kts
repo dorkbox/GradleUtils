@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.time.Instant
 
 gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
@@ -25,9 +24,9 @@ plugins {
 
     id("com.gradle.plugin-publish") version "0.12.0"
 
-    id("com.dorkbox.Licensing") version "2.4"
+    id("com.dorkbox.Licensing") version "2.5"
     id("com.dorkbox.VersionUpdate") version "2.0"
-    id("com.dorkbox.GradleUtils") version "1.9"
+    id("com.dorkbox.GradleUtils") version "1.11"
 
     kotlin("jvm") version "1.4.0"
 }
@@ -36,7 +35,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.11"
+    const val version = "1.12"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -82,10 +81,11 @@ repositories {
 }
 
 dependencies {
+    // compile only, so we dont force kotlin version info into dependencies
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
-    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    compileOnly("org.jetbrains.kotlin:kotlin-reflect")
+    compileOnly("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
     // setup checking for the latest version of a plugin or dependency
     implementation("com.github.ben-manes:gradle-versions-plugin:0.29.0")
