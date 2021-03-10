@@ -25,6 +25,6 @@ enum class SwtType(val id: String) {
 
 
     fun fullId(version: String): String {
-        return "org.eclipse.platform:org.eclipse.swt.$id:$version"
+        return "org.eclipse.platform:$id:$version"
     }
 }
