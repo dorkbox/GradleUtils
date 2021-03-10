@@ -317,26 +317,23 @@ open class StaticMethodsAndTools(private val project: Project) {
         // org.eclipse.swt.cocoa.macosx.x86_64
 
         val currentOS = org.gradle.internal.os.OperatingSystem.current()
-        val windowingTk = when {
-            currentOS.isWindows -> "win32"
-            currentOS.isMacOsX  -> "cocoa"
-            else                -> "gtk"
+        val swtType = if (System.getProperty("os.arch").matches(".*64.*".toRegex())) {
+            when {
+                currentOS.isWindows -> SwtType.WIN_64
+                currentOS.isMacOsX  -> SwtType.MAC_64
+                else                -> SwtType.LINUX_64
+            }
+        } else {
+            when {
+                currentOS.isWindows -> SwtType.WIN_32
+                currentOS.isMacOsX  -> SwtType.MAC_64  // not possible on mac, but here for completeness
+                else                -> SwtType.LINUX_32
+            }
         }
 
-        val platform = when {
-            currentOS.isWindows -> "win32"
-            currentOS.isMacOsX  -> "macosx"
-            else                -> "linux"
-        }
 
+        val fullId = swtType.fullId("Asd")
 
-        var arch = System.getProperty("os.arch")
-        arch = when {
-            arch.matches(".*64.*".toRegex()) -> "x86_64"
-            else                             -> "x86"
-        }
-
-        val mavenId = "$windowingTk.$platform.$arch"
 
         if (!fixedSWT) {
             fixedSWT = true
@@ -348,14 +345,14 @@ open class StaticMethodsAndTools(private val project: Project) {
                             // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
                             // so we replace the dependency, using the osgi platform from the project settings
                             sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
-                                .with(sub.module("org.eclipse.platform:org.eclipse.swt.$mavenId:$version"))
+                                .with(sub.module(fullId))
                         }
                     }
                 }
             }
         }
 
-        return "org.eclipse.platform:org.eclipse.swt.$mavenId:$version"
+        return fullId
     }
 
     private fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
