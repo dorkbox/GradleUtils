@@ -331,9 +331,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
         }
 
-
-        val fullId = swtType.fullId("Asd")
-
+        val fullId = swtType.fullId(version)
 
         if (!fixedSWT) {
             fixedSWT = true
