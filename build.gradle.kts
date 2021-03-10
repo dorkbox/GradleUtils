@@ -24,18 +24,18 @@ plugins {
 
     id("com.gradle.plugin-publish") version "0.12.0"
 
-    id("com.dorkbox.Licensing") version "2.5"
-    id("com.dorkbox.VersionUpdate") version "2.0"
-    id("com.dorkbox.GradleUtils") version "1.11"
+    id("com.dorkbox.Licensing") version "2.5.4"
+    id("com.dorkbox.VersionUpdate") version "2.1"
+    id("com.dorkbox.GradleUtils") version "1.12"
 
-    kotlin("jvm") version "1.4.0"
+    kotlin("jvm") version "1.4.31"
 }
 
 object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "1.12"
+    const val version = "1.13"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -86,10 +86,10 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // setup checking for the latest version of a plugin or dependency
-    implementation("com.github.ben-manes:gradle-versions-plugin:0.29.0")
+    implementation("com.github.ben-manes:gradle-versions-plugin:0.38.0")
 
     // for parsing JSON
-    implementation("org.json:json:20200518")
+    implementation("org.json:json:20210307")
 }
 
 tasks.jar.get().apply {

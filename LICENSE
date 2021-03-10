@@ -1,7 +1,7 @@
  - GradleUtils - Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
    [The Apache Software License, Version 2.0]
    https://git.dorkbox.com/dorkbox/GradleUtils
-   Copyright 2020
+   Copyright 2021
      Dorkbox LLC
 
    Extra license information
@@ -16,12 +16,12 @@
      - Gradle Versions Plugin - This plugin provides a task to determine which dependencies have updates
        [The Apache Software License, Version 2.0]
        https://github.com/ben-manes/gradle-versions-plugin
-       Copyright 2020
+       Copyright 2021
          Ben Manes
 
      - JSON in Java - A light-weight language independent data interchange format.
        [The JSON License]
        https://github.com/stleary/JSON-java
        https://www.json.org/json-en.html
-       Copyright 2020
+       Copyright 2021
          JSON.org
