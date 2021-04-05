@@ -240,19 +240,23 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Basic, default compile configurations
      */
-    fun compileConfiguration(javaVersion: JavaVersion, kotlinActions: (KotlinJvmOptions) -> Unit = {}) {
+    fun compileConfiguration(javaVersion: JavaVersion,
+                             kotlinJavaVersion: JavaVersion = javaVersion,
+                             kotlinActions: (KotlinJvmOptions)
+    -> Unit = {}) {
         val javaVer = javaVersion.toString()
+        val kotlinJavaVer = kotlinJavaVersion.toString()
 
         val kotlinVer: String = try {
             val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
-            val version = kot?.kotlinPluginVersion ?: "1.3.0"
+            val version = kot?.kotlinPluginVersion ?: "1.4.32"
 
             // we ONLY care about the major.minor
             val secondDot = version.indexOf('.', version.indexOf('.')+1)
             version.substring(0, secondDot)
         } catch (e: Exception) {
-            // in case we cannot parse it from the plugin, provide a reasonable default
-            "1.3"
+            // in case we cannot parse it from the plugin, provide a reasonable default (latest stable)
+            "1.4.32"
         }
 
         project.allprojects.forEach { project ->
@@ -282,10 +286,10 @@ open class StaticMethodsAndTools(private val project: Project) {
                     println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
                 }
 
-                task.sourceCompatibility = javaVer
-                task.targetCompatibility = javaVer
+                task.sourceCompatibility = kotlinJavaVer
+                task.targetCompatibility = kotlinJavaVer
 
-                task.kotlinOptions.jvmTarget = javaVer
+                task.kotlinOptions.jvmTarget = kotlinJavaVer
 
                 // default is whatever the version is that we are running, or 1.3 if we cannot figure it out
                 task.kotlinOptions.apiVersion = kotlinVer
