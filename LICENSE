@@ -13,15 +13,20 @@
        Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
        See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
 
-     - Gradle Versions Plugin - This plugin provides a task to determine which dependencies have updates
-       [The Apache Software License, Version 2.0]
-       https://github.com/ben-manes/gradle-versions-plugin
-       Copyright 2021
-         Ben Manes
-
      - JSON in Java - A light-weight language independent data interchange format.
        [The JSON License]
        https://github.com/stleary/JSON-java
        https://www.json.org/json-en.html
        Copyright 2021
          JSON.org
+
+     - Version - Java Semantic Versioning with exceptions. Minor/Patch number optional and build-after-final-dot (minor/patch) permitted.
+       [MIT License]
+       https://git.dorkbox.com/dorkbox/Version
+       Copyright 2020
+         Dorkbox LLC
+         G. Richard Bellamy
+         Kenduck
+         Larry Bordowitz <lbordowitz@yahoo-inc.com>
+         Martin Rüegg <martin.rueegg@bristolpound.org> <martin.rueegg@metaworx.ch>
+         Zafar Khaja <zafarkhaja@gmail.com>

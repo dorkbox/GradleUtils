@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 dorkbox, llc
+ * Copyright 2021 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,6 @@ import java.net.URL
 
 open class
 GradleUpdateTask : DefaultTask() {
-    init {
-        outputs.upToDateWhen { false }
-        outputs.cacheIf { false }
-        description = "Automatically update GRADLE to the latest version"
-    }
-
     @TaskAction
     fun run() {
         val releaseText = URL("https://services.gradle.org/versions/current").readText()

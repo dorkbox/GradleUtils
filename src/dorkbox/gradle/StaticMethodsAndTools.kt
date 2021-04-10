@@ -1,3 +1,18 @@
+/*
+ * Copyright 2021 dorkbox, llc
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package dorkbox.gradle
 
 import org.gradle.api.GradleException
@@ -6,10 +21,10 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginConvention
+import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
-import org.jetbrains.kotlin.gradle.plugin.KotlinBasePluginWrapper
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.util.*
@@ -126,11 +141,76 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     /**
+     * Gets all of the Maven-style Repository URLs for the specified project (or for the root project if not specified).
+     *
+     * @param project which project to get the repository root URLs for
+     * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
+     */
+    fun getProjectRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
+        val repositories = mutableListOf<String>()
+        project.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>().forEach { repo ->
+            val resolver = repo.createResolver()
+            if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
+                // println("searching ${resolver.name}")
+                // println(resolver.root)
+                // all maven patterns are the same!
+                // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
+                // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
+                // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
+
+                if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
+                    try {
+                        val toURL = resolver.root.toASCIIString()
+                        if (toURL.endsWith('/')) {
+                            repositories.add(toURL)
+                        } else {
+                            // the root doesn't always end with a '/', and we must guarantee that
+                            repositories.add("$toURL/")
+                        }
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        }
+        return repositories
+    }
+
+    /**
+     * Resolves all dependencies of the project buildscript
+     *
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+     */
+    fun resolveBuildScriptDependencies(project: Project = this.project): List<DependencyScanner.MavenData> {
+        val existingNames = mutableSetOf<String>()
+
+        return project.buildscript.configurations.flatMap { config ->
+            config.resolvedConfiguration
+                .lenientConfiguration
+                .getFirstLevelModuleDependencies(Specs.SATISFIES_ALL)
+                .mapNotNull { dep ->
+
+                    val module = dep.module.id
+                    val group = module.group
+                    val name = module.name
+                    val version = module.version
+                    val moduleName = "$group:$name"
+
+                    if (!existingNames.contains(moduleName)) {
+                        existingNames.add(moduleName)
+                        DependencyScanner.MavenData(group, name, version)
+                    } else {
+                        null
+                    }
+                }
+        }
+    }
+
+    /**
      * Resolves all child dependencies of the project
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveDependencies(): List<DependencyScanner.Dependency> {
+    fun resolveAllDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
         val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
         val existingNames = mutableSetOf<String>()
 
@@ -145,7 +225,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveCompileDependencies(): List<DependencyScanner.Dependency> {
+    fun resolveCompileDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
         val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
         val existingNames = mutableSetOf<String>()
 
@@ -159,7 +239,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveRuntimeDependencies(): List<DependencyScanner.Dependency> {
+    fun resolveRuntimeDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
         val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
         val existingNames = mutableSetOf<String>()
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 dorkbox, llc
+ * Copyright 2021 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,11 @@
  */
 package dorkbox.gradle
 
-import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.compile.AbstractCompile
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.util.*
 
@@ -42,31 +40,38 @@ class GradleUtils : Plugin<Project> {
 
         project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
             group = "gradle"
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+            description = "Automatically update GRADLE to the latest version"
         }
 
-        project.tasks.create("updateDependencies", DependencyUpdatesTask::class.java).apply {
+        project.tasks.create("updateDependencies", GetVersionInfoTask::class.java).apply {
             group = "gradle"
             outputs.upToDateWhen { false }
             outputs.cacheIf { false }
-
-            resolutionStrategy { strategy ->
-                strategy.componentSelection { rules ->
-                    rules.all { component ->
-                        val rejected = listOf("alpha", "beta", "rc", "cr", "m", "preview")
-                                .map { qualifier -> Regex("(?i).*[.-]$qualifier[.\\d-]*") }
-                                .any { regex -> regex.matches(component.candidate.version) }
-
-                        if (rejected) {
-                            component.reject("Release candidate")
-                        }
-                    }
-                }
-            }
-
-            // optional parameters
-            checkForGradleUpdate = false
+            description = "Fetch the latest version information for project dependencies"
         }
     }
+
+    @Synchronized
+    fun getVersion(): String? {
+        var version: String? = null
+
+        // try to load from maven properties first
+        try {
+            val p = Properties()
+            val `is` = javaClass.getResourceAsStream("/META-INF/maven/com.my.group/my-artefact/pom.properties")
+            if (`is` != null) {
+                p.load(`is`)
+                version = p.getProperty("version", "")
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+        return version
+    }
+
+
 }
 
 // Fix defaults for gradle, since it's mildly retarded when it comes to kotlin, so we can have sane sourceset/configuration options

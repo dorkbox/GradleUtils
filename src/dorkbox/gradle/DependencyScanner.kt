@@ -1,3 +1,18 @@
+/*
+ * Copyright 2021 dorkbox, llc
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package dorkbox.gradle
 
 import org.gradle.api.Project
@@ -10,24 +25,29 @@ object DependencyScanner {
     /**
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun scan(project: Project,
-             configurationName: String,
-             projectDependencies: MutableList<Dependency>,
-             existingNames: MutableSet<String>): MutableList<Dependency> {
+    fun scan(
+        project: Project,
+        configurationName: String,
+        projectDependencies: MutableList<Dependency>,
+        existingNames: MutableSet<String>,
+    ) {
 
-        project.configurations.getByName(configurationName).resolvedConfiguration.firstLevelModuleDependencies.forEach { dep ->
+        val config = project.configurations.getByName(configurationName)
+        if (!config.isCanBeResolved) {
+            return
+        }
+
+        config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
             // we know the FIRST series will exist
             val makeDepTree = makeDepTree(dep, existingNames)
             if (makeDepTree != null) {
                 // it's only null if we've ALREADY scanned it
-                projectDependencies.add(makeDepTree)
+                if (!projectDependencies.contains(makeDepTree)) {
+                    projectDependencies.add(makeDepTree)
+                }
             }
         }
-
-        return projectDependencies
     }
-
-
 
     // how to resolve dependencies
     // NOTE: it is possible, when we have a project DEPEND on an older version of that project (ie: bootstrapped from an older version)
@@ -78,11 +98,13 @@ object DependencyScanner {
         }
     }
 
-    data class Dependency(val group: String,
-                          val name: String,
-                          val version: String,
-                          val artifacts: List<DependencyInfo>,
-                          val children: List<Dependency>) {
+    data class Dependency(
+        val group: String,
+        val name: String,
+        val version: String,
+        val artifacts: List<DependencyInfo>,
+        val children: List<Dependency>
+    ) {
 
         fun mavenId(): String {
             return "$group:$name:$version"
@@ -94,6 +116,13 @@ object DependencyScanner {
     }
 
     data class DependencyInfo(val group: String, val name: String, val version: String, val file: File) {
+        val id: String
+            get() {
+                return "$group:$name:$version"
+            }
+    }
+
+    data class MavenData(val group: String, val name: String, val version: String) {
         val id: String
             get() {
                 return "$group:$name:$version"
