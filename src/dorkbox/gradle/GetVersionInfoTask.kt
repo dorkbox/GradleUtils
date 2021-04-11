@@ -31,9 +31,11 @@ import java.net.URL
 open class
 GetVersionInfoTask : DefaultTask() {
     companion object {
-        private val versionMatcher = """^.*(<release>)(.*)(<\/release>)""".toRegex()
+        private val releaseMatcher = """^.*(<release>)(.*)(<\/release>)""".toRegex()
+        private val versionMatcher = """^.*(<version>)(.*)(<\/version>)""".toRegex()
 
-        private fun getLatestVersionInfo(repositories: List<String>, metadataUrl: String): Version? {
+        private fun getLatestVersionInfo(repositories: List<String>, metadataUrl: String): Pair<Version?, MutableList<Version>> {
+            val allVersions = mutableListOf<Version>()
             var largestReleaseVersion: Version? = null
 
             repositories.forEach { repoUrl ->
@@ -41,21 +43,23 @@ GetVersionInfoTask : DefaultTask() {
                     val url = URL(repoUrl + metadataUrl)
 //                println("Trying: $url")
                     with(url.openConnection() as java.net.HttpURLConnection) {
-                        val lastVersion = InputStreamReader(inputStream).readLines().lastOrNull { line ->
-                            // only care about <release>!
-                            // <release>1.0</release>
-                            line.matches(versionMatcher)
-                        }
+                        InputStreamReader(inputStream).readLines().forEach { line ->
+                            var matchResult = releaseMatcher.find(line)
+                            if (matchResult != null) {
+                                val (_, ver, _) = matchResult.destructured
+                                val releaseVer = Version.from(ver)
 
-                        val matchResult = versionMatcher.find(lastVersion ?: "")
-                        if (matchResult != null) {
-                            val (_, ver, _) = matchResult.destructured
-                            val releaseVer = Version.from(ver)
+                                if (largestReleaseVersion == null) {
+                                    largestReleaseVersion = releaseVer
+                                } else if (releaseVer.greaterThan(largestReleaseVersion)) {
+                                    largestReleaseVersion = releaseVer
+                                }
+                            }
 
-                            if (largestReleaseVersion == null) {
-                                largestReleaseVersion = releaseVer
-                            } else if (releaseVer.greaterThan(largestReleaseVersion)) {
-                                largestReleaseVersion = releaseVer
+                            matchResult = versionMatcher.find(line)
+                            if (matchResult != null) {
+                                val (_, ver, _) = matchResult.destructured
+                                allVersions.add(Version.from(ver))
                             }
                         }
                     }
@@ -63,7 +67,7 @@ GetVersionInfoTask : DefaultTask() {
                 }
             }
 
-            return largestReleaseVersion
+            return Pair(largestReleaseVersion, allVersions)
         }
     }
 
@@ -73,7 +77,7 @@ GetVersionInfoTask : DefaultTask() {
         val repositories = staticMethodsAndTools.getProjectRepositoryUrls(project)
 
         val latestVersionInfo = mutableListOf<dorkbox.gradle.DependencyScanner.MavenData>()
-        val oldVersionInfo = mutableListOf<Pair<dorkbox.gradle.DependencyScanner.MavenData, Version>>()
+        val oldVersionInfo = mutableListOf<Pair<dorkbox.gradle.DependencyScanner.MavenData, Pair<Version, MutableList<Version>>>>()
         val unknownVersionInfo = mutableListOf<dorkbox.gradle.DependencyScanner.MavenData>()
 
         val scriptDependencies = staticMethodsAndTools.resolveBuildScriptDependencies(project)
@@ -86,14 +90,14 @@ GetVersionInfoTask : DefaultTask() {
         }
 
         mergedDeps.forEach { (mergedDep, set) ->
-            val latestVersion = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
+            val latestData = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
 
             set.forEach { dep ->
-                if (latestVersion != null) {
-                    if (Version.from(dep.version) == latestVersion) {
+                if (latestData.first != null) {
+                    if (Version.from(dep.version) == latestData.first) {
                         latestVersionInfo.add(dep)
                     } else {
-                        oldVersionInfo.add(Pair(dep, latestVersion))
+                        oldVersionInfo.add(Pair(dep, Pair(latestData.first!!, latestData.second)))
                     }
                 } else {
                     unknownVersionInfo.add(dep)
@@ -111,8 +115,17 @@ GetVersionInfoTask : DefaultTask() {
         if (oldVersionInfo.isNotEmpty()) {
             println()
             println("The following build script dependencies need updates:")
-            oldVersionInfo.forEach { (dep, ver) ->
-                println("\t - ${dep.group} [${dep.version} -> $ver]")
+
+            oldVersionInfo.forEach { (dep, list) ->
+                // list release version AND all other versions greater than my version
+                val depVersion = Version.from(dep.version)
+                val releaseVersion = list.first
+                val possibleVersionChoices = list.second.filter { it.greaterThan(depVersion) }.toSet()
+
+                println("\t - ${dep.group} [${dep.version} -> $releaseVersion]")
+                if (possibleVersionChoices.size > 1) {
+                    println("\t\tChoices: $possibleVersionChoices")
+                }
             }
         }
 
@@ -142,14 +155,14 @@ GetVersionInfoTask : DefaultTask() {
         }
 
         mergedDeps.forEach { (mergedDep, set) ->
-            val latestVersion = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
+            val latestData = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
 
             set.forEach { dep ->
-                if (latestVersion != null) {
-                    if (Version.from(dep.version) == latestVersion) {
+                if (latestData.first != null) {
+                    if (Version.from(dep.version) == latestData.first) {
                         latestVersionInfo.add(dep)
                     } else {
-                        oldVersionInfo.add(Pair(dep, latestVersion))
+                        oldVersionInfo.add(Pair(dep, Pair(latestData.first!!, latestData.second)))
                     }
                 } else {
                     unknownVersionInfo.add(dep)
@@ -166,8 +179,17 @@ GetVersionInfoTask : DefaultTask() {
         if (oldVersionInfo.isNotEmpty()) {
             println()
             println("The following project dependencies need updates:")
-            oldVersionInfo.forEach { (dep, ver) ->
-                println("\t - ${dep.group}:${dep.name} [${dep.version} -> $ver]")
+
+            oldVersionInfo.forEach { (dep, list) ->
+                // list release version AND all other versions greater than my version
+                val depVersion = Version.from(dep.version)
+                val releaseVersion = list.first
+                val possibleVersionChoices = list.second.filter { it.greaterThan(depVersion) }.toSet()
+
+                println("\t - ${dep.group} [${dep.version} -> $releaseVersion]")
+                if (possibleVersionChoices.size > 1) {
+                    println("\t\tChoices: $possibleVersionChoices")
+                }
             }
         }
 
