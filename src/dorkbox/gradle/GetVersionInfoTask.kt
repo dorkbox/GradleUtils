@@ -90,7 +90,13 @@ GetVersionInfoTask : DefaultTask() {
         }
 
         mergedDeps.forEach { (mergedDep, set) ->
-            val latestData = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
+            // for script dependencies, ALWAYS add the gradle plugin repo!
+            // (we hardcode the value, this is not likely to change, but easy enough to fix if it does...)
+            val newRepos = mutableSetOf<String>()
+            newRepos.add("https://plugins.gradle.org/m2/")
+            newRepos.addAll(repositories)
+
+            val latestData = getLatestVersionInfo(newRepos.toList(), "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
 
             set.forEach { dep ->
                 if (latestData.first != null) {
