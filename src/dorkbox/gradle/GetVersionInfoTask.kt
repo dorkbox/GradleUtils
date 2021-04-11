@@ -76,17 +76,28 @@ GetVersionInfoTask : DefaultTask() {
         val oldVersionInfo = mutableListOf<Pair<dorkbox.gradle.DependencyScanner.MavenData, Version>>()
         val unknownVersionInfo = mutableListOf<dorkbox.gradle.DependencyScanner.MavenData>()
 
-        staticMethodsAndTools.resolveBuildScriptDependencies(project).forEach { dep ->
-            val latestVersion = getLatestVersionInfo(repositories, "${dep.group.replace(".", "/")}/${dep.name}/maven-metadata.xml")
+        val scriptDependencies = staticMethodsAndTools.resolveBuildScriptDependencies(project)
 
-            if (latestVersion != null) {
-                if (Version.from(dep.version) == latestVersion) {
-                    latestVersionInfo.add(dep)
+        // we can have MULTIPLE versions of a single dependency in use!!
+        val mergedDeps = mutableMapOf<DependencyScanner.MavenData, MutableSet<DependencyScanner.MavenData>>()
+        scriptDependencies.forEach { dep ->
+            val deps = mergedDeps.getOrPut(DependencyScanner.MavenData(dep.group, dep.name, "")) { mutableSetOf() }
+            deps.add(dep)
+        }
+
+        mergedDeps.forEach { (mergedDep, set) ->
+            val latestVersion = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
+
+            set.forEach { dep ->
+                if (latestVersion != null) {
+                    if (Version.from(dep.version) == latestVersion) {
+                        latestVersionInfo.add(dep)
+                    } else {
+                        oldVersionInfo.add(Pair(dep, latestVersion))
+                    }
                 } else {
-                    oldVersionInfo.add(Pair(dep, latestVersion))
+                    unknownVersionInfo.add(dep)
                 }
-            } else {
-                unknownVersionInfo.add(dep)
             }
         }
 
@@ -118,22 +129,31 @@ GetVersionInfoTask : DefaultTask() {
         println()
 
         // now for project dependencies!
+        mergedDeps.clear()
         latestVersionInfo.clear()
         oldVersionInfo.clear()
         unknownVersionInfo.clear()
 
-        staticMethodsAndTools.resolveAllDependencies(project).forEach { dep ->
-            val latestVersion = getLatestVersionInfo(repositories, "${dep.group.replace(".", "/")}/${dep.name}/maven-metadata.xml")
+        val resolveAllDependencies = staticMethodsAndTools.resolveAllDependencies(project)
+        // we can have MULTIPLE versions of a single dependency in use!!
+        resolveAllDependencies.forEach { dep ->
+            val deps = mergedDeps.getOrPut(DependencyScanner.MavenData(dep.group, dep.name, "")) { mutableSetOf() }
+            deps.add(DependencyScanner.MavenData(dep.group, dep.name, dep.version))
+        }
 
-            val data = DependencyScanner.MavenData(dep.group, dep.name, dep.version)
-            if (latestVersion != null) {
-                if (Version.from(dep.version) == latestVersion) {
-                    latestVersionInfo.add(data)
+        mergedDeps.forEach { (mergedDep, set) ->
+            val latestVersion = getLatestVersionInfo(repositories, "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml")
+
+            set.forEach { dep ->
+                if (latestVersion != null) {
+                    if (Version.from(dep.version) == latestVersion) {
+                        latestVersionInfo.add(dep)
+                    } else {
+                        oldVersionInfo.add(Pair(dep, latestVersion))
+                    }
                 } else {
-                    oldVersionInfo.add(Pair(data, latestVersion))
+                    unknownVersionInfo.add(dep)
                 }
-            } else {
-                unknownVersionInfo.add(data)
             }
         }
 
