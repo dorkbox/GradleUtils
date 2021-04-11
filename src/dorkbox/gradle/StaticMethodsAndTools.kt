@@ -342,8 +342,9 @@ open class StaticMethodsAndTools(private val project: Project) {
         project.allprojects.forEach { project ->
             project.tasks.withType(JavaCompile::class.java) { task ->
                 task.doFirst {
-                    println("\tCompiling classes to Java $javaVersion")
+                    println("\tCompiling classes to Java ${JavaVersion.toVersion(task.targetCompatibility)}")
                 }
+
                 task.options.encoding = "UTF-8"
 
                 // -Xlint:deprecation
@@ -351,7 +352,6 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                 // -Xlint:unchecked
                 task.options.compilerArgs.add("-Xlint:unchecked")
-
 
                 task.sourceCompatibility = javaVer
                 task.targetCompatibility = javaVer
@@ -371,7 +371,7 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                 task.kotlinOptions.jvmTarget = kotlinJavaVer
 
-                // default is whatever the version is that we are running, or 1.3 if we cannot figure it out
+                // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
                 task.kotlinOptions.apiVersion = kotlinVer
                 task.kotlinOptions.languageVersion = kotlinVer
 
