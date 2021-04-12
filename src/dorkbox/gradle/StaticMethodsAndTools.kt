@@ -180,7 +180,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveBuildScriptDependencies(project: Project = this.project): List<DependencyScanner.MavenData> {
+    fun resolveBuildScriptDependencies(project: Project = this.project): List<DependencyScanner.Maven> {
         val existingNames = mutableSetOf<String>()
 
         return project.buildscript.configurations.flatMap { config ->
@@ -188,7 +188,6 @@ open class StaticMethodsAndTools(private val project: Project) {
                 .lenientConfiguration
                 .getFirstLevelModuleDependencies(Specs.SATISFIES_ALL)
                 .mapNotNull { dep ->
-
                     val module = dep.module.id
                     val group = module.group
                     val name = module.name
@@ -197,7 +196,7 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                     if (!existingNames.contains(moduleName)) {
                         existingNames.add(moduleName)
-                        DependencyScanner.MavenData(group, name, version)
+                        DependencyScanner.Maven(group, name, version)
                     } else {
                         null
                     }

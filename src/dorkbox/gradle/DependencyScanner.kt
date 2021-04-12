@@ -24,6 +24,11 @@ object DependencyScanner {
 
     /**
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+     *
+     *  how to resolve dependencies
+     *  NOTE: it is possible, when we have a project DEPEND on an older version of that project (ie: bootstrapped from an older version)
+     *    we can have infinite recursion.
+     *    This is a problem, so we limit how much a dependency can show up the the tree
      */
     fun scan(
         project: Project,
@@ -36,6 +41,8 @@ object DependencyScanner {
         if (!config.isCanBeResolved) {
             return
         }
+
+        config.resolve()
 
         config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
             // we know the FIRST series will exist
@@ -60,16 +67,17 @@ object DependencyScanner {
         val version = module.version
 
         if (!existingNames.contains("$group:$name")) {
+            existingNames.add("$group:$name")
+
             // println("Searching: $group:$name:$version")
-            val artifacts: List<DependencyInfo> = dep.moduleArtifacts.map { artifact: ResolvedArtifact ->
+            val artifacts: List<Artifact> = dep.moduleArtifacts.map { artifact: ResolvedArtifact ->
                 val artifactModule = artifact.moduleVersion.id
-                DependencyInfo(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
+                Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
             }
 
             val children = mutableListOf<Dependency>()
-            dep.children.forEach {
-                existingNames.add("$group:$name")
-                val makeDep = makeDepTree(it, existingNames)
+            dep.children.forEach { child ->
+                val makeDep = makeDepTree(child, existingNames)
                 if (makeDep != null) {
                     children.add(makeDep)
                 }
@@ -102,7 +110,7 @@ object DependencyScanner {
         val group: String,
         val name: String,
         val version: String,
-        val artifacts: List<DependencyInfo>,
+        val artifacts: List<Artifact>,
         val children: List<Dependency>
     ) {
 
@@ -115,14 +123,14 @@ object DependencyScanner {
         }
     }
 
-    data class DependencyInfo(val group: String, val name: String, val version: String, val file: File) {
+    data class Artifact(val group: String, val name: String, val version: String, val file: File) {
         val id: String
             get() {
                 return "$group:$name:$version"
             }
     }
 
-    data class MavenData(val group: String, val name: String, val version: String) {
+    data class Maven(val group: String, val name: String, val version: String) {
         val id: String
             get() {
                 return "$group:$name:$version"
