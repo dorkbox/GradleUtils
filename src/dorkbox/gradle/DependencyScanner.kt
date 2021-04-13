@@ -195,7 +195,7 @@ object DependencyScanner {
             }
     }
 
-    data class Maven(val group: String, val name: String, val version: String) {
+    data class Maven(val group: String, val name: String, val version: String = "") {
         val id: String
             get() {
                 return "$group:$name:$version"
