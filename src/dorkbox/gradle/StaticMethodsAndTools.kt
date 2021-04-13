@@ -176,13 +176,48 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     /**
+     * Gets all of the Maven-style Repository URLs for the specified project (or for the root project if not specified).
+     *
+     * @param project which project to get the repository root URLs for
+     * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
+     */
+    fun getProjectBuildScriptRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
+        val repositories = mutableListOf<String>()
+        project.buildscript.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
+            .forEach {
+                repo ->
+            val resolver = repo.createResolver()
+            if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
+                // println("searching ${resolver.name}")
+                // println(resolver.root)
+                // all maven patterns are the same!
+                // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
+                // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
+                // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
+
+                if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
+                    try {
+                        val toURL = resolver.root.toASCIIString()
+                        if (toURL.endsWith('/')) {
+                            repositories.add(toURL)
+                        } else {
+                            // the root doesn't always end with a '/', and we must guarantee that
+                            repositories.add("$toURL/")
+                        }
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        }
+        return repositories
+    }
+
+    /**
      * Resolves all dependencies of the project buildscript
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
     fun resolveBuildScriptDependencies(project: Project = this.project): List<DependencyScanner.Maven> {
-        val existingNames = mutableSetOf<String>()
-
         return project.buildscript.configurations.flatMap { config ->
             config.resolvedConfiguration
                 .lenientConfiguration
@@ -192,59 +227,71 @@ open class StaticMethodsAndTools(private val project: Project) {
                     val group = module.group
                     val name = module.name
                     val version = module.version
-                    val moduleName = "$group:$name"
 
-                    if (!existingNames.contains(moduleName)) {
-                        existingNames.add(moduleName)
-                        DependencyScanner.Maven(group, name, version)
-                    } else {
-                        null
-                    }
+                    DependencyScanner.Maven(group, name, version)
                 }
         }
     }
 
     /**
-     * Resolves all child dependencies of the project
+     * Resolves all *declared* dependencies of the project
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveAllDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
-        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
-        val existingNames = mutableSetOf<String>()
+    fun resolveAllDeclaredDependencies(project: Project = this.project): List<DependencyScanner.DependencyData> {
+        // NOTE: we cannot createTree("compile") and createTree("runtime") using the same exitingNames and expect correct results.
+        // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
+        // will be incomplete
 
-        DependencyScanner.scan(project, "compileClasspath", projectDependencies, existingNames)
-        DependencyScanner.scan(project, "runtimeClasspath", projectDependencies, existingNames)
+        // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
+        return (DependencyScanner.scan(project, "compileClasspath", false) +
+                DependencyScanner.scan(project, "runtimeClasspath", false)
+                ).toSet().toList()
+    }
 
-        return projectDependencies
+
+    /**
+     * Recursively resolves all child dependencies of the project
+     *
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+     */
+    fun resolveAllDependencies(project: Project = this.project): List<DependencyScanner.DependencyData> {
+        // NOTE: we cannot createTree("compile") and createTree("runtime") using the same exitingNames and expect correct results.
+        // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
+        // will be incomplete
+
+        // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
+        return (DependencyScanner.scan(project, "compileClasspath") +
+                DependencyScanner.scan(project, "runtimeClasspath")
+                ).toSet().toList()
     }
 
     /**
-     * Resolves all child compile dependencies of the project
+     * Recursively resolves all child compile dependencies of the project
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveCompileDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
+    fun resolveCompileDependencies(project: Project = this.project): DependencyScanner.ProjectDependencies {
         val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
-        val existingNames = mutableSetOf<String>()
+        val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
 
-        DependencyScanner.scan(project, "compileClasspath", projectDependencies, existingNames)
+        DependencyScanner.createTree(project, "compileClasspath", projectDependencies, existingNames)
 
-        return projectDependencies
+        return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
     }
 
     /**
-     * Resolves all child compile dependencies of the project
+     * Recursively resolves all child compile dependencies of the project
      *
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      */
-    fun resolveRuntimeDependencies(project: Project = this.project): List<DependencyScanner.Dependency> {
+    fun resolveRuntimeDependencies(project: Project = this.project): DependencyScanner.ProjectDependencies {
         val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
-        val existingNames = mutableSetOf<String>()
+        val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
 
-        DependencyScanner.scan(project, "runtimeClasspath", projectDependencies, existingNames)
+        DependencyScanner.createTree(project, "runtimeClasspath", projectDependencies, existingNames)
 
-        return projectDependencies
+        return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
     }
 
     /**

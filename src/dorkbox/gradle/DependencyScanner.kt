@@ -19,22 +19,71 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.ResolvedDependency
 import java.io.File
+import java.util.*
 
 object DependencyScanner {
 
     /**
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      *
-     *  how to resolve dependencies
      *  NOTE: it is possible, when we have a project DEPEND on an older version of that project (ie: bootstrapped from an older version)
-     *    we can have infinite recursion.
-     *    This is a problem, so we limit how much a dependency can show up the the tree
+     *    we can have quite deep recursion. A project can never depend on itself, but we check if a project has already been added, and
+     *    don't parse it more than once
+     *
+     *    This is an actual problem...
      */
-    fun scan(
+    fun scan(project: Project, configurationName: String, includeChildren: Boolean = true): List<DependencyData> {
+
+        val projectDependencies = mutableListOf<DependencyData>()
+        val config = project.configurations.getByName(configurationName)
+        if (!config.isCanBeResolved) {
+            return projectDependencies
+        }
+
+        config.resolve()
+
+        val list = LinkedList<ResolvedDependency>()
+
+        config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
+            list.add(dep)
+        }
+
+        var next: ResolvedDependency
+        while (list.isNotEmpty()) {
+            next = list.poll()
+
+            val module = next.module.id
+            val group = module.group
+            val name = module.name
+            val version = module.version
+
+            val artifacts: List<Artifact> = next.moduleArtifacts.map { artifact: ResolvedArtifact ->
+                val artifactModule = artifact.moduleVersion.id
+                Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
+            }
+
+            projectDependencies.add(DependencyData(group, name, version, artifacts))
+            if (includeChildren) {
+                list.addAll(next.children)
+            }
+        }
+
+        return projectDependencies
+    }
+    /**
+     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+     *
+     *  NOTE: it is possible, when we have a project DEPEND on an older version of that project (ie: bootstrapped from an older version)
+     *    we can have quite deep recursion. A project can never depend on itself, but we check if a project has already been added, and
+     *    don't parse it more than once
+     *
+     *    This is an actual problem...
+     */
+    fun createTree(
         project: Project,
         configurationName: String,
         projectDependencies: MutableList<Dependency>,
-        existingNames: MutableSet<String>,
+        existingDeps: MutableMap<String, Dependency>,
     ) {
 
         val config = project.configurations.getByName(configurationName)
@@ -44,50 +93,48 @@ object DependencyScanner {
 
         config.resolve()
 
+        // the root parent is tossed out, but not the topmost list of dependencies
+        val rootParent = Dependency("", "", "", listOf(), projectDependencies)
+
+        val parentList = LinkedList<Dependency>()
+        val list = LinkedList<ResolvedDependency>()
+
         config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
-            // we know the FIRST series will exist
-            val makeDepTree = makeDepTree(dep, existingNames)
-            if (makeDepTree != null) {
-                // it's only null if we've ALREADY scanned it
-                if (!projectDependencies.contains(makeDepTree)) {
-                    projectDependencies.add(makeDepTree)
-                }
-            }
-        }
-    }
-
-    // how to resolve dependencies
-    // NOTE: it is possible, when we have a project DEPEND on an older version of that project (ie: bootstrapped from an older version)
-    //  we can have infinite recursion.
-    //  This is a problem, so we limit how much a dependency can show up the the tree
-    private fun makeDepTree(dep: ResolvedDependency, existingNames: MutableSet<String>): Dependency? {
-        val module = dep.module.id
-        val group = module.group
-        val name = module.name
-        val version = module.version
-
-        if (!existingNames.contains("$group:$name")) {
-            existingNames.add("$group:$name")
-
-            // println("Searching: $group:$name:$version")
-            val artifacts: List<Artifact> = dep.moduleArtifacts.map { artifact: ResolvedArtifact ->
-                val artifactModule = artifact.moduleVersion.id
-                Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
-            }
-
-            val children = mutableListOf<Dependency>()
-            dep.children.forEach { child ->
-                val makeDep = makeDepTree(child, existingNames)
-                if (makeDep != null) {
-                    children.add(makeDep)
-                }
-            }
-
-            return Dependency(group, name, version, artifacts, children.toList())
+            list.add(dep)
+            parentList.add(rootParent)
         }
 
-        // we already have this dependency in our chain.
-        return null
+
+        var next: ResolvedDependency
+        while (list.isNotEmpty()) {
+            next = list.poll()
+
+            val module = next.module.id
+            val group = module.group
+            val name = module.name
+            val version = module.version
+            val mavenId = "$group:$name:$version"
+
+            if (!existingDeps.containsKey(mavenId)) {
+                val artifacts: List<Artifact> = next.moduleArtifacts.map { artifact: ResolvedArtifact ->
+                    val artifactModule = artifact.moduleVersion.id
+                    Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
+                }
+
+                val dependency = Dependency(group, name, version, artifacts, mutableListOf())
+
+                // now add to our parent
+                val parent = parentList.poll()
+                (parent.children as MutableList).add(dependency)
+
+                next.children.forEach { child ->
+                    parentList.add(dependency)
+                    list.add(child)
+                }
+
+                existingDeps[mavenId] = dependency
+            }
+        }
     }
 
     /**
@@ -103,6 +150,24 @@ object DependencyScanner {
         flatDeps.add(dep)
         dep.children.forEach {
             flattenDep(it, flatDeps)
+        }
+    }
+
+    data class ProjectDependencies(val tree: List<Dependency>, val dependencies: List<Dependency>)
+
+    data class DependencyData(
+        val group: String,
+        val name: String,
+        val version: String,
+        val artifacts: List<Artifact>
+    ) {
+
+        fun mavenId(): String {
+            return "$group:$name:$version"
+        }
+
+        override fun toString(): String {
+            return mavenId()
         }
     }
 
