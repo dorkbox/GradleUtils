@@ -13,6 +13,12 @@
        Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
        See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
 
+     - kotlinx.coroutines - Library support for Kotlin coroutines with multiplatform support
+       [The Apache Software License, Version 2.0]
+       https://github.com/Kotlin/kotlinx.coroutines
+       Copyright 2021
+         JetBrains s.r.o.
+
      - JSON in Java - A light-weight language independent data interchange format.
        [The JSON License]
        https://github.com/stleary/JSON-java

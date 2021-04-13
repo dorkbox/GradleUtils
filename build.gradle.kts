@@ -35,7 +35,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "2.3"
+    const val version = "2.4"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -82,6 +82,8 @@ repositories {
 
 dependencies {
     // compile only, so we dont force kotlin/dsl version info into dependencies
+
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
 
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
