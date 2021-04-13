@@ -40,7 +40,11 @@ object DependencyScanner {
             return projectDependencies
         }
 
-        config.resolve()
+        try {
+            config.resolve()
+        } catch (e: Throwable) {
+            println("Unable to resolve the $configurationName configuration for the project ${project.name}")
+        }
 
         val list = LinkedList<ResolvedDependency>()
 
@@ -56,10 +60,16 @@ object DependencyScanner {
             val group = module.group
             val name = module.name
             val version = module.version
+            val mavenId = "$group:$name:$version"
 
-            val artifacts: List<Artifact> = next.moduleArtifacts.map { artifact: ResolvedArtifact ->
-                val artifactModule = artifact.moduleVersion.id
-                Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
+            val artifacts = mutableListOf<Artifact>()
+            next.moduleArtifacts.forEach {  artifact: ResolvedArtifact ->
+                try {
+                    val artifactModule = artifact.moduleVersion.id
+                    artifacts.add(Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile))
+                } catch (e: Exception) {
+                    println("Error getting artifact for $mavenId, file: ${artifact.file.absoluteFile}")
+                }
             }
 
             projectDependencies.add(DependencyData(group, name, version, artifacts))
@@ -70,6 +80,7 @@ object DependencyScanner {
 
         return projectDependencies
     }
+
     /**
      * THIS MUST BE IN "afterEvaluate" or run from a specific task.
      *
@@ -82,16 +93,20 @@ object DependencyScanner {
     fun createTree(
         project: Project,
         configurationName: String,
-        projectDependencies: MutableList<Dependency>,
-        existingDeps: MutableMap<String, Dependency>,
-    ) {
+        projectDependencies: MutableList<Dependency> = mutableListOf(),
+        existingDeps: MutableMap<String, Dependency> = mutableMapOf(),
+    ): List<Dependency> {
 
         val config = project.configurations.getByName(configurationName)
         if (!config.isCanBeResolved) {
-            return
+            return projectDependencies
         }
 
-        config.resolve()
+        try {
+            config.resolve()
+        } catch (e: Throwable) {
+            println("Unable to resolve the $configurationName configuration for the project ${project.name}")
+        }
 
         // the root parent is tossed out, but not the topmost list of dependencies
         val rootParent = Dependency("", "", "", listOf(), projectDependencies)
@@ -116,9 +131,14 @@ object DependencyScanner {
             val mavenId = "$group:$name:$version"
 
             if (!existingDeps.containsKey(mavenId)) {
-                val artifacts: List<Artifact> = next.moduleArtifacts.map { artifact: ResolvedArtifact ->
-                    val artifactModule = artifact.moduleVersion.id
-                    Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile)
+                val artifacts = mutableListOf<Artifact>()
+                next.moduleArtifacts.forEach {  artifact: ResolvedArtifact ->
+                    try {
+                        val artifactModule = artifact.moduleVersion.id
+                        artifacts.add(Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile))
+                    } catch (e: Exception) {
+                        println("Error getting artifact for $mavenId, file: ${artifact.file.absoluteFile}")
+                    }
                 }
 
                 val dependency = Dependency(group, name, version, artifacts, mutableListOf())
@@ -135,6 +155,8 @@ object DependencyScanner {
                 existingDeps[mavenId] = dependency
             }
         }
+
+        return projectDependencies
     }
 
     /**
