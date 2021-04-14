@@ -83,8 +83,6 @@ repositories {
 dependencies {
     // compile only, so we dont force kotlin/dsl version info into dependencies
 
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
-
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 

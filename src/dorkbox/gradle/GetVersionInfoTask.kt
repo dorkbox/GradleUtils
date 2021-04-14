@@ -16,7 +16,6 @@
 package dorkbox.gradle
 
 import com.dorkbox.version.Version
-import kotlinx.coroutines.*
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskAction
@@ -24,6 +23,7 @@ import java.io.InputStreamReader
 import java.net.URL
 import java.util.*
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.write
 
@@ -49,7 +49,7 @@ GetVersionInfoTask : DefaultTask() {
         private val releaseMatcher = """^.*(<release>)(.*)(<\/release>)""".toRegex()
         private val versionMatcher = """^.*(<version>)(.*)(<\/version>)""".toRegex()
 
-        private val httpDispatcher = Executors.newFixedThreadPool(8).asCoroutineDispatcher()
+        private val httpDispatcher = Executors.newFixedThreadPool(8)
 
         private fun getLatestVersionInfo(
             repositories: List<String>,
@@ -58,7 +58,7 @@ GetVersionInfoTask : DefaultTask() {
 
             // first get all version information across ALL projects.
             // do this in parallel with coroutines!
-            val jobs = mutableListOf<Job>()
+            val futures = mutableListOf<Future<*>>()
             val mergedVersionInfo = mutableMapOf<DependencyScanner.Maven, VersionHolder>()
             val downloadLock = ReentrantReadWriteLock()
 
@@ -73,42 +73,41 @@ GetVersionInfoTask : DefaultTask() {
                     }
                 }
 
-                val job = GlobalScope.launch {
-                    withContext(httpDispatcher) {
-                        repositories.forEach { repoUrl ->
-                            try {
-                                val url = URL(repoUrl + metadataUrl)
-                                // println("Trying: $url")
-                                with(url.openConnection() as java.net.HttpURLConnection) {
-                                    InputStreamReader(inputStream).readLines().forEach { line ->
-                                        var matchResult = releaseMatcher.find(line)
-                                        if (matchResult != null) {
-                                            val (_, ver, _) = matchResult.destructured
-                                            downloadLock.write {
-                                                depVersionInfo.updateReleaseVersion(ver)
-                                            }
+                val future = httpDispatcher.submit {
+                    repositories.forEach { repoUrl ->
+                        try {
+                            val url = URL(repoUrl + metadataUrl)
+                            // println("Trying: $url")
+                            with(url.openConnection() as java.net.HttpURLConnection) {
+                                InputStreamReader(inputStream).readLines().forEach { line ->
+                                    var matchResult = releaseMatcher.find(line)
+                                    if (matchResult != null) {
+                                        val (_, ver, _) = matchResult.destructured
+                                        downloadLock.write {
+                                            depVersionInfo.updateReleaseVersion(ver)
                                         }
+                                    }
 
-                                        matchResult = versionMatcher.find(line)
-                                        if (matchResult != null) {
-                                            val (_, ver, _) = matchResult.destructured
-                                            downloadLock.write {
-                                                depVersionInfo.addVersion(ver)
-                                            }
+                                    matchResult = versionMatcher.find(line)
+                                    if (matchResult != null) {
+                                        val (_, ver, _) = matchResult.destructured
+                                        downloadLock.write {
+                                            depVersionInfo.addVersion(ver)
                                         }
                                     }
                                 }
-                            } catch (e: Exception) {
                             }
+                        } catch (e: Exception) {
                         }
                     }
                 }
-                jobs.add(job)
+
+                futures.add(future)
             }
 
             println("\tGetting version data for ${mergedDeps.size} dependencies...")
-            runBlocking {
-                jobs.forEach { it.join() }
+            futures.forEach {
+                it.get()
             }
 
             downloadLock.write {
