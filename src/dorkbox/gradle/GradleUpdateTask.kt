@@ -41,7 +41,7 @@ GradleUpdateTask : DefaultTask() {
             if (current == foundGradleVersion) {
                 println("\tGradle is already latest version '$foundGradleVersion'")
             } else {
-                println("\tDetected new Gradle Version: '$foundGradleVersion', updating from $current")
+                println("\tDetected new Gradle Version: '$foundGradleVersion', updating from '$current'")
 
                 val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
                 wrapper.apply {
