@@ -299,10 +299,21 @@ open class StaticMethodsAndTools(private val project: Project) {
      * set gradle project defaults, as used by dorkbox, llc
      */
     fun defaults() {
+        addMavenRepositories()
         fixIntellijPaths()
         fixMavenPaths()
         defaultResolutionStrategy()
         defaultCompileOptions()
+    }
+
+    /**
+     * Adds maven-local + maven-central repositories
+     */
+    fun addMavenRepositories() {
+        project.repositories.apply {
+            mavenLocal() // this must be first!
+            mavenCentral()
+        }
     }
 
     /**
