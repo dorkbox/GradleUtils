@@ -52,26 +52,6 @@ class GradleUtils : Plugin<Project> {
             description = "Fetch the latest version information for project dependencies"
         }
     }
-
-    @Synchronized
-    fun getVersion(): String? {
-        var version: String? = null
-
-        // try to load from maven properties first
-        try {
-            val p = Properties()
-            val `is` = javaClass.getResourceAsStream("/META-INF/maven/com.my.group/my-artefact/pom.properties")
-            if (`is` != null) {
-                p.load(`is`)
-                version = p.getProperty("version", "")
-            }
-        } catch (e: Exception) {
-            // ignore
-        }
-        return version
-    }
-
-
 }
 
 // Fix defaults for gradle, since it's mildly retarded when it comes to kotlin, so we can have sane sourceset/configuration options
