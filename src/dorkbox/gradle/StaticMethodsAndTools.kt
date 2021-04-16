@@ -296,6 +296,16 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     /**
+     * set gradle project defaults, as used by dorkbox, llc
+     */
+    fun defaults() {
+        fixIntellijPaths()
+        fixMavenPaths()
+        defaultResolutionStrategy()
+        defaultCompileOptions()
+    }
+
+    /**
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
@@ -404,6 +414,20 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
     }
 
+    /**
+     * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
+     */
+    fun defaultCompileOptions() {
+        project.allprojects.forEach { project ->
+            project.afterEvaluate { prj ->
+                prj.tasks.withType(JavaCompile::class.java) {
+                    it.options.encoding = "UTF-8"
+                    it.options.isIncremental = true
+                    it.options.compilerArgs.add("-Xpkginfo:always")
+                }
+            }
+        }
+    }
 
     /**
      * Basic, default compile configurations
