@@ -22,6 +22,7 @@ import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.specs.Specs
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
@@ -333,6 +334,47 @@ open class StaticMethodsAndTools(private val project: Project) {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Change the source input from the opinionated sonatype paths to a simpler directory
+     */
+    fun fixMavenPaths() {
+        // it is SUPER annoying to use the opinionated sonatype directory structure. I don't like it.
+        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+
+        val main = sourceSets.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
+        val test = sourceSets.named("test", org.gradle.api.tasks.SourceSet::class.java).get()
+
+        main.java.setSrcDirs(project.files("src"))
+        main.java.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+        main.resources.setSrcDirs(project.files("resources"))
+
+        test.java.setSrcDirs(project.files("test"))
+        test.java.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+        test.resources.setSrcDirs(project.files("testResources"))
+
+        // If kotlin is not used, we should not use the kotlin tasks
+        val hasKotlinFiles = try {
+            val kotlin = (main as org.gradle.api.internal.HasConvention).convention.getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin
+
+            kotlin.files.firstOrNull { it.name.endsWith(".kt") } != null
+        } catch (e: Exception) {
+            false
+        }
+
+        if (hasKotlinFiles) {
+            (main as org.gradle.api.internal.HasConvention).convention
+                .getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin.apply {
+                    setSrcDirs(project.files("src"))
+                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                }
+            (test as org.gradle.api.internal.HasConvention).convention
+                .getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin.apply {
+                    setSrcDirs(project.files("test"))
+                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                }
         }
     }
 
