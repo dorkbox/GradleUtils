@@ -29,19 +29,38 @@ import kotlin.concurrent.write
 
 open class
 GetVersionInfoTask : DefaultTask() {
-    private data class VersionHolder(var release: Version?, val versions: MutableList<Version>) {
+    private data class VersionHolder(var release: String?, val versions: MutableSet<String>) {
         fun updateReleaseVersion(version: String) {
-            val releaseVer = Version.from(version)
-
             if (release == null) {
-                release = releaseVer
-            } else if (releaseVer.greaterThan(release)) {
-                release = releaseVer
+                release = version
+            } else {
+                // there can be errors when parsing version info, since not versions follow loose-semantic versioning
+                try {
+                    val currentVersion = Version.from(release)
+                    val releaseVer = Version.from(version)
+
+                    if (releaseVer.greaterThan(currentVersion)) {
+                        release = version
+                    }
+                } catch (e: Exception) {
+                    // ignored
+                }
             }
         }
 
         fun addVersion(ver: String) {
-            versions.add(Version.from(ver))
+            versions.add(ver)
+        }
+
+        fun getVersionOptions(currentVersion: String): List<String> {
+            // there can be errors when parsing version info, since not versions follow loose-semantic versioning
+            val myVersionIndex = versions.indexOfFirst { it == currentVersion }
+
+            return if (myVersionIndex >= 0) {
+                return versions.filterIndexed { index, _ -> index <= myVersionIndex }
+            } else {
+                versions.toList()
+            }
         }
     }
 
@@ -69,7 +88,7 @@ GetVersionInfoTask : DefaultTask() {
                 // version info is per dependency
                 val depVersionInfo = downloadLock.write {
                     mergedVersionInfo.getOrPut(DependencyScanner.Maven(mergedDep.group, mergedDep.name)) {
-                        VersionHolder(null, mutableListOf())
+                        VersionHolder(null, mutableSetOf())
                     }
                 }
 
@@ -105,9 +124,11 @@ GetVersionInfoTask : DefaultTask() {
                 futures.add(future)
             }
 
-            println("\tGetting version data for ${mergedDeps.size} dependencies...")
-            futures.forEach {
-                it.get()
+            if (mergedDeps.isNotEmpty()) {
+                println("\tGetting version data for ${mergedDeps.size} dependencies...")
+                futures.forEach {
+                    it.get()
+                }
             }
 
             downloadLock.write {
@@ -144,71 +165,61 @@ GetVersionInfoTask : DefaultTask() {
             mergedDeps.forEach { (mergedDep, existingVersions) ->
                 val latestInfo: VersionHolder = mergedVersionInfo[mergedDep]!!
                 existingVersions.forEach { dep ->
-                    if (latestInfo.release != null) {
-                        if (Version.from(dep.version) == latestInfo.release) {
+                    if (latestInfo.release == null) {
+                        unknownVersionInfo.add(dep)
+                    } else {
+                        if (dep.version == latestInfo.release) {
                             latestVersionInfo.add(dep)
                         } else {
                             oldVersionInfo.add(Pair(dep, latestInfo))
                         }
-                    } else {
-                        unknownVersionInfo.add(dep)
                     }
                 }
             }
 
-            println("\t------------------------------------------------------------")
-            println("\tThe following build script dependencies are using the latest release version:")
-            latestVersionInfo.forEach { dep ->
-                println("\t - ${dep.group}:${dep.version}")
-            }
+            val hasLatest = latestVersionInfo.isNotEmpty()
+            val hasOld = oldVersionInfo.isNotEmpty()
+            val hasUnknown = unknownVersionInfo.isNotEmpty()
 
-            if (oldVersionInfo.isNotEmpty()) {
-                println()
-                println("\tThe following build script dependencies need updates:")
+            if (hasLatest || hasOld || hasUnknown) {
+                println("\t------------------------------------------------------------")
 
-                oldVersionInfo.forEach { (dep, versionHolder) ->
-                    // list release version AND all other versions greater than my version
-                    val depVersion = Version.from(dep.version)
-                    val possibleVersionChoices = versionHolder.versions.filter { it.greaterThan(depVersion) }.toSet()
-
-                    // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
-                    println("\t - ${dep.group} [${dep.version} -> ${versionHolder.release}]")
-                    if (possibleVersionChoices.size > 1) {
-                        println("\t\t$possibleVersionChoices")
+                if (hasLatest) {
+                    println("\tThe following build script dependencies are using the latest release version:")
+                    latestVersionInfo.forEach { dep ->
+                        println("\t - ${dep.group}:${dep.version}")
                     }
                 }
-            }
 
-            if (unknownVersionInfo.isNotEmpty()) {
-                println()
-                println("\tThe following build script dependencies have unknown updates:")
-                unknownVersionInfo.forEach { dep ->
-                    // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
-                    println("\t - ${dep.group}:${dep.version}")
+                if (hasOld) {
+                    println()
+                    println("\tThe following build script dependencies need updates:")
+
+                    oldVersionInfo.forEach { (dep, versionHolder) ->
+                        // list release version AND all other versions greater than my version
+                        val versionOptions = versionHolder.getVersionOptions(dep.version)
+
+                        // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
+                        println("\t - ${dep.group}:${dep.version} -> $versionOptions")
+                    }
+                }
+
+                if (hasUnknown) {
+                    println()
+                    println("\tThe following build script dependencies have unknown updates:")
+                    unknownVersionInfo.forEach { dep ->
+                        // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
+                        println("\t - ${dep.group}:${dep.version}")
+                    }
                 }
             }
         }
 
         private fun projectDependencies(staticMethodsAndTools: StaticMethodsAndTools, project: Project) {
-            // collect ALL projected + children projects.
-            val projects = mutableListOf<Project>()
-            val recursive = LinkedList<Project>()
-            recursive.add(project)
-
-
-            var next: Project
-            while (recursive.isNotEmpty()) {
-                next = recursive.poll()
-                projects.add(next)
-                recursive.addAll(next.childProjects.values)
-            }
-
-
             val mergedDeps = mutableMapOf<DependencyScanner.Maven, MutableSet<DependencyScanner.Maven>>()
             val mergedRepos = mutableSetOf<String>()
 
-
-            projects.forEach { subProject ->
+            project.allprojects.forEach { subProject ->
                 staticMethodsAndTools.resolveAllDeclaredDependencies(subProject).forEach { dep ->
                     val deps = mergedDeps.getOrPut(DependencyScanner.Maven(dep.group, dep.name)) { mutableSetOf() }
                     deps.add(DependencyScanner.Maven(dep.group, dep.name, dep.version))
@@ -228,9 +239,8 @@ GetVersionInfoTask : DefaultTask() {
             val unknownVersionInfo = mutableListOf<DependencyScanner.Maven>()
 
 
-
             // now for project dependencies!
-            projects.forEach { subProject ->
+            project.allprojects.forEach { subProject ->
                 mergedDeps.clear()
                 latestVersionInfo.clear()
                 oldVersionInfo.clear()
@@ -248,7 +258,7 @@ GetVersionInfoTask : DefaultTask() {
                     val latestInfo: VersionHolder = mergedVersionInfo[mergedDep]!!
                     existingVersions.forEach { dep ->
                         if (latestInfo.release != null) {
-                            if (Version.from(dep.version) == latestInfo.release) {
+                            if (dep.version == latestInfo.release) {
                                 latestVersionInfo.add(dep)
                             } else {
                                 oldVersionInfo.add(Pair(dep, latestInfo))
@@ -267,33 +277,41 @@ GetVersionInfoTask : DefaultTask() {
                 }
 
 
-                println("\t------------------------------------------------------------")
-                println("\tThe following project$projectName dependencies are using the latest release version:")
-                latestVersionInfo.forEach { dep ->
-                    println("\t - ${dep.group}:${dep.name}:${dep.version}")
-                }
+                val hasLatest = latestVersionInfo.isNotEmpty()
+                val hasOld = oldVersionInfo.isNotEmpty()
+                val hasUnknown = unknownVersionInfo.isNotEmpty()
 
-                if (oldVersionInfo.isNotEmpty()) {
-                    println()
-                    println("\tThe following project$projectName dependencies need updates:")
+                if (hasLatest || hasOld || hasUnknown) {
+                    println("\t------------------------------------------------------------")
 
-                    oldVersionInfo.forEach { (dep, versionHolder) ->
-                        // list release version AND all other versions greater than my version
-                        val depVersion = Version.from(dep.version)
-                        val possibleVersionChoices = versionHolder.versions.filter { it.greaterThan(depVersion) }.toSet()
-
-                        println("\t - ${dep.group}:${dep.name} [${dep.version} -> ${versionHolder.release}]")
-                        if (possibleVersionChoices.size > 1) {
-                            println("\t\t$possibleVersionChoices")
+                    if (hasLatest) {
+                        println("\tThe following project$projectName dependencies are using the latest release version:")
+                        latestVersionInfo.forEach { dep ->
+                            println("\t - ${dep.group}:${dep.name}:${dep.version}")
                         }
                     }
-                }
 
-                if (unknownVersionInfo.isNotEmpty()) {
-                    println()
-                    println("\tThe following project$projectName dependencies have unknown updates:")
-                    unknownVersionInfo.forEach { dep ->
-                        println("\t - ${dep.group}:${dep.name}:${dep.version}")
+
+                    if (hasOld) {
+                        println()
+                        println("\tThe following project$projectName dependencies need updates:")
+
+                        oldVersionInfo.forEach { (dep, versionHolder) ->
+                            // list release version AND all other versions greater than my version
+                            val possibleVersionChoices = versionHolder.getVersionOptions(dep.version)
+
+                            println("\t - ${dep.group}:${dep.name}:${dep.version} -> ${versionHolder.release}")
+                            println("\t - ${dep.group}:${dep.name}:${dep.version} -> ${versionHolder.versions}")
+                            println("\t - ${dep.group}:${dep.name}:${dep.version} -> $possibleVersionChoices")
+                        }
+                    }
+
+                    if (hasUnknown) {
+                        println()
+                        println("\tThe following project$projectName dependencies have unknown updates:")
+                        unknownVersionInfo.forEach { dep ->
+                            println("\t - ${dep.group}:${dep.name}:${dep.version}")
+                        }
                     }
                 }
             }
