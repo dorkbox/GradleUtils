@@ -15,6 +15,8 @@
  */
 package dorkbox.gradle
 
+import dorkbox.gradle.deps.DependencyScanner
+import dorkbox.gradle.jpms.SourceSetContainer2
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
@@ -377,15 +379,9 @@ open class StaticMethodsAndTools(private val project: Project) {
         test.resources.setSrcDirs(project.files("testResources"))
 
         // If kotlin is not used, we should not use the kotlin tasks
-        val hasKotlinFiles = try {
-            val kotlin = (main as org.gradle.api.internal.HasConvention).convention.getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin
+        val hasKotlin = project.projectDir.walkTopDown().find { it.extension == "kt" }?.exists() ?: false // is there kotlin?
 
-            kotlin.files.firstOrNull { it.name.endsWith(".kt") } != null
-        } catch (e: Exception) {
-            false
-        }
-
-        if (hasKotlinFiles) {
+        if (hasKotlin) {
             (main as org.gradle.api.internal.HasConvention).convention
                 .getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin.apply {
                     setSrcDirs(project.files("src"))
@@ -573,5 +569,20 @@ open class StaticMethodsAndTools(private val project: Project) {
         if (project.pluginManager.findPlugin(id) == null) {
             project.pluginManager.apply(id)
         }
+    }
+
+
+    /**
+     * Load JPMS for a specific java version using the default configuration
+     */
+    fun jpms(javaVersion: JavaVersion) {
+        SourceSetContainer2(javaVersion, project)
+    }
+
+    /**
+     * Load and configure JPMS for a specific java version
+     */
+    fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit) {
+        block(SourceSetContainer2(javaVersion, project))
     }
 }
