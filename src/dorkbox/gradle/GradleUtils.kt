@@ -15,13 +15,18 @@
  */
 package dorkbox.gradle
 
+import dorkbox.gradle.deps.GetVersionInfoTask
+import dorkbox.gradle.jpms.JavaXConfiguration
+import org.gradle.api.DomainObjectCollection
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.plugins.JavaPlugin
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
+import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
-import java.util.*
 
 
 /**
@@ -51,6 +56,8 @@ class GradleUtils : Plugin<Project> {
             outputs.cacheIf { false }
             description = "Fetch the latest version information for project dependencies"
         }
+
+        JavaXConfiguration.reset(project)
     }
 }
 

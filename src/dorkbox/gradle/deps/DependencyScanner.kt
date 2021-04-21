@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dorkbox.gradle
+
+package dorkbox.gradle.deps
 
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ResolvedArtifact

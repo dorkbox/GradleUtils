@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dorkbox.gradle
+
+package dorkbox.gradle.deps
 
 import com.dorkbox.version.Version
+import dorkbox.gradle.StaticMethodsAndTools
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskAction

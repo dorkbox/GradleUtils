@@ -16,6 +16,7 @@
 package dorkbox.gradle
 
 import dorkbox.gradle.deps.DependencyScanner
+import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
@@ -575,14 +576,16 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Load JPMS for a specific java version using the default configuration
      */
-    fun jpms(javaVersion: JavaVersion) {
-        SourceSetContainer2(javaVersion, project)
+    fun jpms(javaVersion: JavaVersion): JavaXConfiguration {
+        return JavaXConfiguration.get(javaVersion, project)
     }
 
     /**
      * Load and configure JPMS for a specific java version
      */
-    fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit) {
-        block(SourceSetContainer2(javaVersion, project))
+    fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit): JavaXConfiguration {
+        val javaX = JavaXConfiguration.get(javaVersion, project)
+        block(SourceSetContainer2(javaX))
+        return javaX
     }
 }
