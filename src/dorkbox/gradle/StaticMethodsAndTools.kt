@@ -577,14 +577,14 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Load JPMS for a specific java version using the default configuration
      */
     fun jpms(javaVersion: JavaVersion): JavaXConfiguration {
-        return JavaXConfiguration.get(javaVersion, project)
+        return JavaXConfiguration(javaVersion, project)
     }
 
     /**
      * Load and configure JPMS for a specific java version
      */
     fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit): JavaXConfiguration {
-        val javaX = JavaXConfiguration.get(javaVersion, project)
+        val javaX = JavaXConfiguration(javaVersion, project)
         block(SourceSetContainer2(javaX))
         return javaX
     }

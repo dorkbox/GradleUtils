@@ -56,8 +56,6 @@ class GradleUtils : Plugin<Project> {
             outputs.cacheIf { false }
             description = "Fetch the latest version information for project dependencies"
         }
-
-        JavaXConfiguration.reset(project)
     }
 }
 
