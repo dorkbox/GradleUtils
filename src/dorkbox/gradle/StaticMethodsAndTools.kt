@@ -24,10 +24,12 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginConvention
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
+import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
@@ -587,5 +589,68 @@ open class StaticMethodsAndTools(private val project: Project) {
         val javaX = JavaXConfiguration(javaVersion, project)
         block(SourceSetContainer2(javaX))
         return javaX
+    }
+
+
+    /**
+     * Should gradle try to infer that this project is a JPMS module by analysing JARs and the classpath?
+     *
+     * Only possible for gradle >= 6.4
+     */
+    fun inferJpmsModule() {
+        if (GradleVersion.current() >= GradleVersion.version("6.4")) {
+            project.gradle.taskGraph.whenReady {
+                project.convention.configure(JavaPluginExtension::class.java) {
+                    // Should a --module-path be inferred by analysing JARs and class folders on the classpath?
+                    it.modularity.inferModulePath.set(true)
+                }
+            }
+        }
+    }
+
+    /**
+     * Fix issues where code (usually test code) needs access to **INTERNAL** scope objects.
+     *  -- at the moment, this only fixes gradle -- not intellij
+     *     There are also gradle 8 warnings when using this.
+     *
+     *  https://stackoverflow.com/questions/59072889/how-to-test-kotlin-function-declared-internal-from-within-tests-when-java-test
+     *  https://youtrack.jetbrains.com/issue/KT-20760
+     *  https://youtrack.jetbrains.com/issue/KT-45787
+     *  https://stackoverflow.com/questions/57050889/kotlin-internal-members-not-accessible-from-alternative-test-source-set-in-gradl
+     *  https://youtrack.jetbrains.com/issue/KT-34901
+     *
+     *  (related)
+     *  https://github.com/JetBrains/kotlin/blob/master/compiler/cli/cli-common/src/org/jetbrains/kotlin/cli/common/arguments/K2JVMCompilerArguments.kt
+     *  https://github.com/bazelbuild/rules_kotlin/pull/465
+     *  https://github.com/bazelbuild/rules_kotlin/issues/211
+     *
+     * Two things are required for this to work
+     *
+     * 1) The kotlin module names must be the same
+     * 2) The kotlin modules must be associated
+     */
+    fun allowKotlinInternalAccessForTests(moduleName: String, vararg accessGroup: AccessGroup) {
+        // Make sure to cleanup the any possible license file on clean
+        println("\tAllowing kotlin internal access for $moduleName")
+
+        project.tasks.withType(KotlinCompile::class.java).forEach {
+            it.kotlinOptions.moduleName = moduleName  // must be the same module name for everything!
+        }
+
+
+        accessGroup.forEach {
+            // allow code in a *different* directory access to "internal" scope members of code.
+            // THIS FIXES GRADLE - BUT NOT INTELLIJ!
+            val kotlinExt = project.extensions.getByName("kotlin") as org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+            kotlinExt.target.compilations.getByName(it.sourceName).apply {
+                it.targetNames.forEach { targetName ->
+                    associateWith(target.compilations.getByName(targetName))
+                }
+            }
+        }
+    }
+
+    class AccessGroup(val sourceName: String, vararg targetNames: String) {
+        val targetNames: Array<out String> = targetNames
     }
 }
