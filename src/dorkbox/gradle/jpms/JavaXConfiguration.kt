@@ -16,6 +16,7 @@
 
 package dorkbox.gradle.jpms
 
+import dorkbox.gradle.StaticMethodsAndTools
 import dorkbox.gradle.kotlin
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
@@ -47,12 +48,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
     // this cannot be ONLY a number, there must be something else -- intellij will *not* pickup the name if it's only a number
     val nameX = "_$ver"
 
-    // If kotlin files are present(meaning kotlin is used), we should setup the kotlin tasks
-    val hasKotlin = project.projectDir.walkTopDown().find { it.extension == "kt" }?.exists() ?: false
-    val hasJava = project.projectDir.walkTopDown().find {
-            it.extension == "java" && !(it.name == "module-info.java" ||
-                                        it.name == "package-info.java" ||
-                                        it.name == "EmptyClass.java") }?.exists() ?: false
+    // If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
+    val hasKotlin = StaticMethodsAndTools.hasKotlin(project)
 
     val moduleFile = project.projectDir.walkTopDown().find { it.name == "module-info.java" }
     var moduleName: String
@@ -90,7 +87,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
     init {
         if (moduleFile == null) {
-            throw GradleException("Cannot manage JPMS build without a `module-info` file.")
+            throw GradleException("Cannot manage JPMS build without a `module-info.java` file.")
         }
         // also the source dirs have been configured/setup.
         moduleName = moduleFile.readLines()[0].split(" ")[1].trimEnd('{')
@@ -99,10 +96,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
         }
 
         val info = when {
-            hasJava && hasKotlin -> "Initializing [JPMS $ver] '$moduleName' -> Java/Kotlin"
-            hasJava -> "Initializing [JPMS $ver] '$moduleName' -> Java"
-            hasKotlin -> "Initializing [JPMS $ver] '$moduleName' -> Kotlin"
-            else -> throw GradleException("Unable to initialize unknown JPMS type, no Java or Kotlin files found.")
+            hasKotlin -> "Initializing JPMS $ver, Java/Kotlin [$moduleName]"
+                 else -> "Initializing JPMS $ver, Java [$moduleName]"
         }
         println("\t$info")
 

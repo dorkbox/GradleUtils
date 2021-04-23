@@ -32,6 +32,7 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.utils.toSetOrEmpty
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
@@ -41,11 +42,51 @@ import kotlin.reflect.full.declaredMemberProperties
 
 
 open class StaticMethodsAndTools(private val project: Project) {
+    companion object {
+        /**
+         * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
+         */
+        fun hasKotlin(project: Project): Boolean {
+            try {
+                project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
+
+                // this will check if the task exists, and throw an exception if it does not
+                project.tasks.named("compileKotlin", KotlinCompile::class.java).orNull ?: return false
+
+                // now see if we have any kotlin files. we REQUIRE this to be the "main" source-set. If "test" or a different source-set
+                // has kotlin, BUT NOT THE MAIN - will will determine "no kotlin". There must be at least ONE kt file in main.
+
+                val initialCheck = project.projectDir.walkTopDown().find { it.extension == "kt" }?.exists() ?: false
+                if (!initialCheck) {
+                    return false
+                }
+
+                // basic check -- we have kotlin somewhere. NOW check to see exactly where.
+
+                val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+                val main = sourceSets.getByName("main")
+
+                val files = main.java.srcDirs + main.kotlin.srcDirs
+                files.forEach { srcDir ->
+                    val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
+                    if (kotlinFile?.exists() == true) {
+                        println("*** KOTLIN IN PROJECT: $project ${kotlinFile.absolutePath}")
+                        return true
+                    }
+                }
+            } catch (e: Exception) {
+            }
+
+            return false
+        }
+    }
+
     val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
     val isLinux = org.gradle.internal.os.OperatingSystem.current().isLinux
     val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
     val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
 
+    private val hasKotlin = hasKotlin(project)
     private var fixedSWT = false
 
 
@@ -345,21 +386,62 @@ open class StaticMethodsAndTools(private val project: Project) {
 
             // this has the side-effect of NOT creating the gradle directories....
 
-            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
-            project.afterEvaluate { prj ->
-                prj.allprojects.forEach { proj ->
-                    val javaPlugin: JavaPluginConvention = proj.convention.getPlugin(JavaPluginConvention::class.java)
-                    val sourceSets = javaPlugin.sourceSets
-
-                    sourceSets.forEach { set ->
-                        set.output.classesDirs.forEach { dir ->
-                            if (!dir.exists()) {
-                                dir.mkdirs()
-                            }
-                        }
-                    }
-                }
-            }
+//            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
+//            project.afterEvaluate { prj ->
+//                val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
+//                sourceSets.forEach { set ->
+//                    set.output.classesDirs.forEach { dir ->
+//                        println("Creating dir: ${dir.absolutePath}")
+//                        if (!dir.exists()) {
+//                            dir.mkdirs()
+//                        }
+//                    }
+//                }
+//            }
+//
+//
+//            val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+//            sourceSets.forEach { set ->
+//                val name = set.name
+//
+//                println("\tFixing IntelliJ sourceSet: $name")
+//
+//                // https://stackoverflow.com/questions/42064377/mark-gradle-source-folder-as-test-source-in-intellij
+//                // https://youtrack.jetbrains.com/issue/IDEA-165647`
+//                // if this is a TEST dir, add it to intellij test dirs!
+//                val files = set.java.srcDirs
+//                if (hasKotlin) {
+//                    files.addAll(set.kotlin.srcDirs)
+//                }
+//
+//                val absoluteFiles = files.map{it.absoluteFile}
+//                absoluteFiles.forEach {
+//                    println("***${it}")
+//                }
+//
+//                if (name.toLowerCase().contains("test") ||
+//                    absoluteFiles.any { it.name.toLowerCase().contains("test") }) {
+//                    println("\t\tFixing IntelliJ test sourceSet: $name")
+//
+//                    idea(project) {
+//                        module { mod ->
+//                            println("MOD::: ${mod.name}")
+//                            println("\t\tsource:" + mod.sourceDirs)
+//                            println("\t\ttest:" + mod.testSourceDirs)
+//
+//                            mod.sourceDirs.removeAll(absoluteFiles)
+//                            mod.testSourceDirs.addAll(absoluteFiles)
+//
+//                            val scopeMap = mod.scopes["TEST"]
+////                                    += [ configurations.performanceTestCompile ]
+//
+//                            println("\t\tMod source:" + mod.sourceDirs)
+//                            println("\t\tMod test:" + mod.testSourceDirs)
+//                        }
+//                    }
+//                }
+////                    }
+//            }
         }
     }
 
@@ -382,19 +464,16 @@ open class StaticMethodsAndTools(private val project: Project) {
         test.resources.setSrcDirs(project.files("testResources"))
 
         // If kotlin is not used, we should not use the kotlin tasks
-        val hasKotlin = project.projectDir.walkTopDown().find { it.extension == "kt" }?.exists() ?: false // is there kotlin?
-
         if (hasKotlin) {
-            (main as org.gradle.api.internal.HasConvention).convention
-                .getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin.apply {
-                    setSrcDirs(project.files("src"))
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
-                }
-            (test as org.gradle.api.internal.HasConvention).convention
-                .getPlugin(org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet::class.java).kotlin.apply {
-                    setSrcDirs(project.files("test"))
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
-                }
+            main.kotlin {
+                setSrcDirs(project.files("src"))
+                include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+            }
+
+            test.kotlin {
+                setSrcDirs(project.files("test"))
+                include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+            }
         }
     }
 
@@ -402,8 +481,8 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Configure a default resolution strategy. While not necessary, this is used for enforcing sane project builds
      */
     fun defaultResolutionStrategy() {
-        project.allprojects.forEach { project ->
-            project.configurations.forEach { config ->
+        project.allprojects.forEach { proj ->
+            proj.configurations.forEach { config ->
                 config.resolutionStrategy {
                     it.apply {
                         // fail eagerly on version conflict (includes transitive dependencies)
@@ -444,18 +523,22 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun compileConfiguration(javaVersion: JavaVersion,
                              kotlinJavaVersion: JavaVersion = javaVersion,
-                             kotlinActions: (KotlinJvmOptions)
-    -> Unit = {}) {
+                             kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString()
 
-        val kotlinVer: String = try {
-            val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
-            val version = kot?.kotlinPluginVersion ?: "1.4.32"
 
-            // we ONLY care about the major.minor
-            val secondDot = version.indexOf('.', version.indexOf('.')+1)
-            version.substring(0, secondDot)
+        val kotlinVer: String = try {
+            if (hasKotlin) {
+                val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
+                val version = kot?.kotlinPluginVersion ?: "1.4.32"
+
+                // we ONLY care about the major.minor
+                val secondDot = version.indexOf('.', version.indexOf('.')+1)
+                version.substring(0, secondDot)
+            } else {
+                "1.4.32"
+            }
         } catch (e: Exception) {
             // in case we cannot parse it from the plugin, provide a reasonable default (latest stable)
             "1.4.32"
@@ -483,22 +566,24 @@ open class StaticMethodsAndTools(private val project: Project) {
                 it.duplicatesStrategy = DuplicatesStrategy.FAIL
             }
 
-            project.tasks.withType(KotlinCompile::class.java) { task ->
-                task.doFirst {
-                    println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+            if (hasKotlin) {
+                project.tasks.withType(KotlinCompile::class.java) { task ->
+                    task.doFirst {
+                        println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+                    }
+
+                    task.sourceCompatibility = kotlinJavaVer
+                    task.targetCompatibility = kotlinJavaVer
+
+                    task.kotlinOptions.jvmTarget = kotlinJavaVer
+
+                    // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
+                    task.kotlinOptions.apiVersion = kotlinVer
+                    task.kotlinOptions.languageVersion = kotlinVer
+
+                    // see: https://kotlinlang.org/docs/reference/using-gradle.html
+                    kotlinActions(task.kotlinOptions)
                 }
-
-                task.sourceCompatibility = kotlinJavaVer
-                task.targetCompatibility = kotlinJavaVer
-
-                task.kotlinOptions.jvmTarget = kotlinJavaVer
-
-                // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
-                task.kotlinOptions.apiVersion = kotlinVer
-                task.kotlinOptions.languageVersion = kotlinVer
-
-                // see: https://kotlinlang.org/docs/reference/using-gradle.html
-                kotlinActions(task.kotlinOptions)
             }
         }
     }
@@ -630,21 +715,22 @@ open class StaticMethodsAndTools(private val project: Project) {
      * 2) The kotlin modules must be associated
      */
     fun allowKotlinInternalAccessForTests(moduleName: String, vararg accessGroup: AccessGroup) {
-        // Make sure to cleanup the any possible license file on clean
-        println("\tAllowing kotlin internal access for $moduleName")
+        if (hasKotlin) {
+            // Make sure to cleanup the any possible license file on clean
+            println("\tAllowing kotlin internal access for $moduleName")
 
-        project.tasks.withType(KotlinCompile::class.java).forEach {
-            it.kotlinOptions.moduleName = moduleName  // must be the same module name for everything!
-        }
+            project.tasks.withType(KotlinCompile::class.java).forEach {
+                it.kotlinOptions.moduleName = moduleName  // must be the same module name for everything!
+            }
 
-
-        accessGroup.forEach {
-            // allow code in a *different* directory access to "internal" scope members of code.
-            // THIS FIXES GRADLE - BUT NOT INTELLIJ!
-            val kotlinExt = project.extensions.getByName("kotlin") as org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
-            kotlinExt.target.compilations.getByName(it.sourceName).apply {
-                it.targetNames.forEach { targetName ->
-                    associateWith(target.compilations.getByName(targetName))
+            accessGroup.forEach {
+                // allow code in a *different* directory access to "internal" scope members of code.
+                // THIS FIXES GRADLE - BUT NOT INTELLIJ!
+                val kotlinExt = project.extensions.getByName("kotlin") as org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+                kotlinExt.target.compilations.getByName(it.sourceName).apply {
+                    it.targetNames.forEach { targetName ->
+                        associateWith(target.compilations.getByName(targetName))
+                    }
                 }
             }
         }
