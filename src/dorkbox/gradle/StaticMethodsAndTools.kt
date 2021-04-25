@@ -43,21 +43,27 @@ open class StaticMethodsAndTools(private val project: Project) {
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
          */
-        fun hasKotlin(project: Project): Boolean {
+        fun hasKotlin(project: Project, debug: Boolean = false): Boolean {
             try {
                 // check if plugin is available
                 project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
 
+                if (debug) println("\t Has kotlin plugin")
+
                 // this will check if the task exists, and throw an exception if it does not or return false
                 project.tasks.named("compileKotlin", KotlinCompile::class.java).orNull ?: return false
+
+                if (debug) println("\t Has compile kotlin task")
 
                 // check to see if we have any kotlin file. We cannot use sourcesets or anything ELSE because it might not have been
                 // configured yet!
                 val kotlinFile = project.buildFile.parentFile.walkTopDown().find { it.extension == "kt" }
                 if (kotlinFile?.exists() == true) {
+                    if (debug) println("\t Has kotlin file: $kotlinFile")
                     return true
                 }
             } catch (e: Exception) {
+                if (debug) e.printStackTrace()
             }
 
             return false

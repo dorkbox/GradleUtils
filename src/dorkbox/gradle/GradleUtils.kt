@@ -56,6 +56,13 @@ class GradleUtils : Plugin<Project> {
             outputs.cacheIf { false }
             description = "Fetch the latest version information for project dependencies"
         }
+
+        project.tasks.create("checkKotlin", CheckKotlinTask::class.java).apply {
+            group = "other"
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+            description = "Debug output for checking if kotlin is currently installed in the project"
+        }
     }
 }
 
