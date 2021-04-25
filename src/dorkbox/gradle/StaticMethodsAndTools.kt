@@ -716,7 +716,8 @@ open class StaticMethodsAndTools(private val project: Project) {
             println("\tAllowing kotlin internal access for $moduleName")
 
             project.tasks.withType(KotlinCompile::class.java).forEach {
-                it.kotlinOptions.moduleName = moduleName  // must be the same module name for everything!
+                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                it.kotlinOptions.moduleName = moduleName
             }
 
             accessGroup.forEach {

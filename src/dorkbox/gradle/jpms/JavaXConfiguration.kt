@@ -49,7 +49,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
     val nameX = "_$ver"
 
     // If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
-    val hasKotlin = StaticMethodsAndTools.hasKotlin(project)
+    val hasKotlin: Boolean
 
     val moduleFile = project.projectDir.walkTopDown().find { it.name == "module-info.java" }
     var moduleName: String
@@ -94,6 +94,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
         if (moduleName.isEmpty()) {
             throw GradleException("The module name must be specified in the module-info file! Verify file: $moduleFile")
         }
+
+        hasKotlin = StaticMethodsAndTools.hasKotlin(project)
 
         val info = when {
             hasKotlin -> "Initializing JPMS $ver, Java/Kotlin [$moduleName]"
@@ -208,7 +210,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
                 sourceCompatibility = ver
                 targetCompatibility = ver
                 kotlinOptions.jvmTarget = ver
-                kotlinOptions.moduleName = compileMainKotlin.kotlinOptions.moduleName  // must be the same module name
+                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                kotlinOptions.moduleName = project.name
             }
 
             compileTestXKotlin.apply {
@@ -216,7 +219,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
                 sourceCompatibility = ver
                 targetCompatibility = ver
                 kotlinOptions.jvmTarget = ver
-                kotlinOptions.moduleName = compileTestKotlin.kotlinOptions.moduleName  // must be the same module name
+                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                kotlinOptions.moduleName = project.name
             }
         }
 
@@ -234,21 +238,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
                 mainX.allSource.srcDirs
             )
 
-            val allCompiled = if (hasKotlin) {
-                proj.files(
-                    compileMainJava.destinationDir,
-                    compileMainKotlin.destinationDir
-                )
-            } else {
-                proj.files(
-                    compileMainJava.destinationDir
-                )
-            }
-
-
             source = allSource.asFileTree // the files live in this location
             include("**/module-info.java")
-
 
             sourceCompatibility = ver
             targetCompatibility = ver
@@ -261,6 +252,12 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
             // modules require this!
             doFirst {
+                val allCompiled = if (hasKotlin) {
+                    proj.files(compileMainJava.destinationDir, compileMainKotlin.destinationDir)
+                } else {
+                    proj.files(compileMainJava.destinationDir)
+                }
+
                 // the SOURCE of the module-info.java file. It uses **EVERYTHING**
                 options.sourcepath = allSource
                 options.compilerArgs.addAll(listOf(
@@ -315,6 +312,10 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
                     val length = details.path.length + 1
 
                     val sourceDir = absolutePath.substring(0, absolutePath.length - length)
+
+//                    println("checking file: $absolutePath")
+//                    println("checking file: $sourceDir")
+
                     if (sourcePaths.contains(sourceDir)) {
 //                        println("Moving: " + absolutePath)
 //                        println("      : " + details.path)
