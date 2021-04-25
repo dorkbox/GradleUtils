@@ -18,10 +18,7 @@ package dorkbox.gradle
 import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
-import org.gradle.api.GradleException
-import org.gradle.api.JavaVersion
-import org.gradle.api.Plugin
-import org.gradle.api.Project
+import org.gradle.api.*
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.plugins.JavaPluginExtension
@@ -48,31 +45,17 @@ open class StaticMethodsAndTools(private val project: Project) {
          */
         fun hasKotlin(project: Project): Boolean {
             try {
+                // check if plugin is available
                 project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
 
-                // this will check if the task exists, and throw an exception if it does not
+                // this will check if the task exists, and throw an exception if it does not or return false
                 project.tasks.named("compileKotlin", KotlinCompile::class.java).orNull ?: return false
 
-                // now see if we have any kotlin files. we REQUIRE this to be the "main" source-set. If "test" or a different source-set
-                // has kotlin, BUT NOT THE MAIN - will will determine "no kotlin". There must be at least ONE kt file in main.
-
-                val initialCheck = project.projectDir.walkTopDown().find { it.extension == "kt" }?.exists() ?: false
-                if (!initialCheck) {
-                    return false
-                }
-
-                // basic check -- we have kotlin somewhere. NOW check to see exactly where.
-
-                val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-                val main = sourceSets.getByName("main")
-
-                val files = main.java.srcDirs + main.kotlin.srcDirs
-                files.forEach { srcDir ->
-                    val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
-                    if (kotlinFile?.exists() == true) {
-                        println("*** KOTLIN IN PROJECT: $project ${kotlinFile.absolutePath}")
-                        return true
-                    }
+                // check to see if we have any kotlin file. We cannot use sourcesets or anything ELSE because it might not have been
+                // configured yet!
+                val kotlinFile = project.buildFile.parentFile.walkTopDown().find { it.extension == "kt" }
+                if (kotlinFile?.exists() == true) {
+                    return true
                 }
             } catch (e: Exception) {
             }
@@ -86,9 +69,9 @@ open class StaticMethodsAndTools(private val project: Project) {
     val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
     val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
 
-    private val hasKotlin = hasKotlin(project)
     private var fixedSWT = false
-
+    // this is lazy, because it MUST be run from a task!
+    val hasKotlin: Boolean by lazy { hasKotlin(project) }
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
@@ -449,32 +432,46 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Change the source input from the opinionated sonatype paths to a simpler directory
      */
     fun fixMavenPaths() {
-        // it is SUPER annoying to use the opinionated sonatype directory structure. I don't like it.
-        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+        // it is SUPER annoying to use the opinionated sonatype directory structure. I don't like it. We pass in the "configuration" action
+        // instead of doing it a different way, so the creation AND configuration of these sorucesets can occur. (Otherwise they won't)
+        val configure: Action<SourceSetContainer> = Action {
+            val main = it.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
+            val test = it.named("test", org.gradle.api.tasks.SourceSet::class.java).get()
 
-        val main = sourceSets.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
-        val test = sourceSets.named("test", org.gradle.api.tasks.SourceSet::class.java).get()
+            main.apply {
+                java.apply {
+                    setSrcDirs(project.files("src"))
+                    include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+                }
 
-        main.java.setSrcDirs(project.files("src"))
-        main.java.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
-        main.resources.setSrcDirs(project.files("resources"))
+                if (hasKotlin) {
+                    main.kotlin {
+                        setSrcDirs(project.files("src"))
+                        include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    }
+                }
 
-        test.java.setSrcDirs(project.files("test"))
-        test.java.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
-        test.resources.setSrcDirs(project.files("testResources"))
-
-        // If kotlin is not used, we should not use the kotlin tasks
-        if (hasKotlin) {
-            main.kotlin {
-                setSrcDirs(project.files("src"))
-                include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                resources.setSrcDirs(project.files("resources"))
             }
 
-            test.kotlin {
-                setSrcDirs(project.files("test"))
-                include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+            test.apply {
+                java.apply {
+                    setSrcDirs(project.files("test"))
+                    include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+                }
+
+                if (hasKotlin) {
+                    test.kotlin {
+                        setSrcDirs(project.files("test"))
+                        include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    }
+                }
+
+                resources.setSrcDirs(project.files("testResources"))
             }
         }
+
+        (project as org.gradle.api.plugins.ExtensionAware).extensions.configure("sourceSets", configure)
     }
 
     /**
@@ -526,7 +523,6 @@ open class StaticMethodsAndTools(private val project: Project) {
                              kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString()
-
 
         val kotlinVer: String = try {
             if (hasKotlin) {
