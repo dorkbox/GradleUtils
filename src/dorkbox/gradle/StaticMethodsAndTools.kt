@@ -42,6 +42,7 @@ open class StaticMethodsAndTools(private val project: Project) {
     companion object {
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
+         * NOTE: This can ONLY be called from a task, it cannot be called globally!
          */
         fun hasKotlin(project: Project, debug: Boolean = false): Boolean {
             try {
@@ -55,12 +56,26 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                 if (debug) println("\t Has compile kotlin task")
 
-                // check to see if we have any kotlin file. We cannot use sourcesets or anything ELSE because it might not have been
-                // configured yet!
-                val kotlinFile = project.buildFile.parentFile.walkTopDown().find { it.extension == "kt" }
-                if (kotlinFile?.exists() == true) {
-                    if (debug) println("\t Has kotlin file: $kotlinFile")
-                    return true
+                // check to see if we have any kotlin file
+                val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+                val main = sourceSets.getByName("main")
+
+                if (debug) {
+                    println("\t main dirs: ${main.java.srcDirs}")
+                    println("\t kotlin dirs: ${main.kotlin.srcDirs}")
+
+                    project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
+                        println("\t\t$it")
+                    }
+                }
+
+                val files = main.java.srcDirs + main.kotlin.srcDirs
+                files.forEach { srcDir ->
+                    val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
+                    if (kotlinFile?.exists() == true) {
+                        if (debug) println("\t Has kotlin file: $kotlinFile")
+                        return true
+                    }
                 }
             } catch (e: Exception) {
                 if (debug) e.printStackTrace()
