@@ -39,7 +39,7 @@ class GradleUtils : Plugin<Project> {
     private lateinit var propertyMappingExtension: StaticMethodsAndTools
 
     override fun apply(project: Project) {
-        println("\tGradle ${project.gradle.gradleVersion} on Java ${JavaVersion.current()}")
+        println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
 
