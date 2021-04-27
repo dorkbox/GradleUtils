@@ -370,7 +370,6 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
-        project.allprojects.forEach { project ->
             // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
             apply(project, "idea")
 
@@ -446,7 +445,6 @@ open class StaticMethodsAndTools(private val project: Project) {
 //                }
 ////                    }
 //            }
-        }
     }
 
     /**
@@ -499,23 +497,21 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Configure a default resolution strategy. While not necessary, this is used for enforcing sane project builds
      */
     fun defaultResolutionStrategy() {
-        project.allprojects.forEach { proj ->
-            proj.configurations.forEach { config ->
-                config.resolutionStrategy {
-                    it.apply {
-                        // fail eagerly on version conflict (includes transitive dependencies)
-                        // e.g. multiple different versions of the same dependency (group and name are equal)
-                        failOnVersionConflict()
+        project.configurations.forEach { config ->
+            config.resolutionStrategy {
+                it.apply {
+                    // fail eagerly on version conflict (includes transitive dependencies)
+                    // e.g. multiple different versions of the same dependency (group and name are equal)
+                    failOnVersionConflict()
 
-                        // if there is a version we specified, USE THAT VERSION (over transitive versions)
-                        preferProjectModules()
+                    // if there is a version we specified, USE THAT VERSION (over transitive versions)
+                    preferProjectModules()
 
-                        // cache dynamic versions for 10 minutes
-                        cacheDynamicVersionsFor(10 * 60, "seconds")
+                    // cache dynamic versions for 10 minutes
+                    cacheDynamicVersionsFor(10 * 60, "seconds")
 
-                        // don't cache changing modules at all
-                        cacheChangingModulesFor(0, "seconds")
-                    }
+                    // don't cache changing modules at all
+                    cacheChangingModulesFor(0, "seconds")
                 }
             }
         }
@@ -525,13 +521,11 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
      */
     fun defaultCompileOptions() {
-        project.allprojects.forEach { project ->
-            project.afterEvaluate { prj ->
-                prj.tasks.withType(JavaCompile::class.java) {
-                    it.options.encoding = "UTF-8"
-                    it.options.isIncremental = true
-                    it.options.compilerArgs.add("-Xpkginfo:always")
-                }
+        project.afterEvaluate { prj ->
+            prj.tasks.withType(JavaCompile::class.java) {
+                it.options.encoding = "UTF-8"
+                it.options.isIncremental = true
+                it.options.compilerArgs.add("-Xpkginfo:always")
             }
         }
     }
@@ -561,46 +555,44 @@ open class StaticMethodsAndTools(private val project: Project) {
             "1.4.32"
         }
 
-        project.allprojects.forEach { project ->
-            project.tasks.withType(JavaCompile::class.java) { task ->
+        project.tasks.withType(JavaCompile::class.java) { task ->
+            task.doFirst {
+                println("\tCompiling classes to Java ${JavaVersion.toVersion(task.targetCompatibility)}")
+            }
+
+            task.options.encoding = "UTF-8"
+
+            // -Xlint:deprecation
+            task.options.isDeprecation = true
+
+            // -Xlint:unchecked
+            task.options.compilerArgs.add("-Xlint:unchecked")
+
+            task.sourceCompatibility = javaVer
+            task.targetCompatibility = javaVer
+        }
+
+        project.tasks.withType(Jar::class.java) {
+            it.duplicatesStrategy = DuplicatesStrategy.FAIL
+        }
+
+        if (hasKotlin) {
+            project.tasks.withType(KotlinCompile::class.java) { task ->
                 task.doFirst {
-                    println("\tCompiling classes to Java ${JavaVersion.toVersion(task.targetCompatibility)}")
+                    println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
                 }
 
-                task.options.encoding = "UTF-8"
+                task.sourceCompatibility = kotlinJavaVer
+                task.targetCompatibility = kotlinJavaVer
 
-                // -Xlint:deprecation
-                task.options.isDeprecation = true
+                task.kotlinOptions.jvmTarget = kotlinJavaVer
 
-                // -Xlint:unchecked
-                task.options.compilerArgs.add("-Xlint:unchecked")
+                // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
+                task.kotlinOptions.apiVersion = kotlinVer
+                task.kotlinOptions.languageVersion = kotlinVer
 
-                task.sourceCompatibility = javaVer
-                task.targetCompatibility = javaVer
-            }
-
-            project.tasks.withType(Jar::class.java) {
-                it.duplicatesStrategy = DuplicatesStrategy.FAIL
-            }
-
-            if (hasKotlin) {
-                project.tasks.withType(KotlinCompile::class.java) { task ->
-                    task.doFirst {
-                        println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
-                    }
-
-                    task.sourceCompatibility = kotlinJavaVer
-                    task.targetCompatibility = kotlinJavaVer
-
-                    task.kotlinOptions.jvmTarget = kotlinJavaVer
-
-                    // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
-                    task.kotlinOptions.apiVersion = kotlinVer
-                    task.kotlinOptions.languageVersion = kotlinVer
-
-                    // see: https://kotlinlang.org/docs/reference/using-gradle.html
-                    kotlinActions(task.kotlinOptions)
-                }
+                // see: https://kotlinlang.org/docs/reference/using-gradle.html
+                kotlinActions(task.kotlinOptions)
             }
         }
     }
@@ -644,15 +636,13 @@ open class StaticMethodsAndTools(private val project: Project) {
         if (!fixedSWT) {
             fixedSWT = true
 
-            project.allprojects.forEach { project ->
-                project.configurations.all { config ->
-                    config.resolutionStrategy { strat ->
-                        strat.dependencySubstitution { sub ->
-                            // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
-                            // so we replace the dependency, using the osgi platform from the project settings
-                            sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
-                                .with(sub.module(fullId))
-                        }
+            project.configurations.all { config ->
+                config.resolutionStrategy { strat ->
+                    strat.dependencySubstitution { sub ->
+                        // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
+                        // so we replace the dependency, using the osgi platform from the project settings
+                        sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
+                            .with(sub.module(fullId))
                     }
                 }
             }
