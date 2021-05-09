@@ -490,12 +490,10 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
      */
     fun defaultCompileOptions() {
-        project.afterEvaluate { prj ->
-            prj.tasks.withType(JavaCompile::class.java) {
-                it.options.encoding = "UTF-8"
-                it.options.isIncremental = true
-                it.options.compilerArgs.add("-Xpkginfo:always")
-            }
+        project.tasks.withType(JavaCompile::class.java) {
+            it.options.encoding = "UTF-8"
+            it.options.isIncremental = true
+            it.options.compilerArgs.add("-Xpkginfo:always")
         }
     }
 
@@ -507,21 +505,22 @@ open class StaticMethodsAndTools(private val project: Project) {
                              kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString()
+        val defaultKotlinVersion = "1.5.0"
 
         val kotlinVer: String = try {
             if (hasKotlin) {
                 val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
-                val version = kot?.kotlinPluginVersion ?: "1.4.32"
+                val version = kot?.kotlinPluginVersion ?: defaultKotlinVersion
 
                 // we ONLY care about the major.minor
                 val secondDot = version.indexOf('.', version.indexOf('.')+1)
                 version.substring(0, secondDot)
             } else {
-                "1.4.32"
+                defaultKotlinVersion
             }
         } catch (e: Exception) {
             // in case we cannot parse it from the plugin, provide a reasonable default (latest stable)
-            "1.4.32"
+            defaultKotlinVersion
         }
 
         project.tasks.withType(JavaCompile::class.java) { task ->
