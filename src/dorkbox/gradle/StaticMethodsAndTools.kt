@@ -20,7 +20,6 @@ import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import org.gradle.api.*
 import org.gradle.api.file.DuplicatesStrategy
-import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
@@ -29,7 +28,6 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import org.jetbrains.kotlin.gradle.utils.toSetOrEmpty
 import java.io.File
 import java.util.*
 import kotlin.reflect.KMutableProperty
@@ -83,6 +81,22 @@ open class StaticMethodsAndTools(private val project: Project) {
 
             return false
         }
+
+        internal fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
+            project.extensions.configure("idea", configure)
+
+        // required to make sure the plugins are correctly applied. ONLY applying it to the project WILL NOT work.
+        // The plugin must also be applied to the root project
+        // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
+        internal fun apply(project: Project, id: String) {
+            if (project.rootProject.pluginManager.findPlugin(id) == null) {
+                project.rootProject.pluginManager.apply(id)
+            }
+
+            if (project.pluginManager.findPlugin(id) == null) {
+                project.pluginManager.apply(id)
+            }
+        }
     }
 
     val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
@@ -93,6 +107,10 @@ open class StaticMethodsAndTools(private val project: Project) {
     private var fixedSWT = false
     // this is lazy, because it MUST be run from a task!
     val hasKotlin: Boolean by lazy { hasKotlin(project) }
+
+    init {
+        apply(project, "idea")
+    }
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
@@ -350,8 +368,8 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun defaults() {
         addMavenRepositories()
-        fixIntellijPaths()
         fixMavenPaths()
+        fixIntellijPaths()
         defaultResolutionStrategy()
         defaultCompileOptions()
     }
@@ -367,130 +385,81 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     /**
-     * Fix the compiled output from intellij to be SEPARATE from gradle.
-     */
-    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
-            // https://discuss.gradle.org/t/can-a-plugin-itself-add-buildscript-dependencies-and-then-apply-a-plugin/25039/4
-            apply(project, "idea")
-
-            // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
-            idea(project) {
-                // https://youtrack.jetbrains.com/issue/IDEA-175172
-                module {
-                    val mainDir = File(location)
-                    it.outputDir = mainDir
-                    it.testOutputDir = mainDir
-
-                    // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
-                    it.isDownloadJavadoc = false
-                    it.isDownloadSources = true
-                }
-            }
-
-            // this has the side-effect of NOT creating the gradle directories....
-
-//            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM!
-//            project.afterEvaluate { prj ->
-//                val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
-//                sourceSets.forEach { set ->
-//                    set.output.classesDirs.forEach { dir ->
-//                        println("Creating dir: ${dir.absolutePath}")
-//                        if (!dir.exists()) {
-//                            dir.mkdirs()
-//                        }
-//                    }
-//                }
-//            }
-//
-//
-//            val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-//            sourceSets.forEach { set ->
-//                val name = set.name
-//
-//                println("\tFixing IntelliJ sourceSet: $name")
-//
-//                // https://stackoverflow.com/questions/42064377/mark-gradle-source-folder-as-test-source-in-intellij
-//                // https://youtrack.jetbrains.com/issue/IDEA-165647`
-//                // if this is a TEST dir, add it to intellij test dirs!
-//                val files = set.java.srcDirs
-//                if (hasKotlin) {
-//                    files.addAll(set.kotlin.srcDirs)
-//                }
-//
-//                val absoluteFiles = files.map{it.absoluteFile}
-//                absoluteFiles.forEach {
-//                    println("***${it}")
-//                }
-//
-//                if (name.toLowerCase().contains("test") ||
-//                    absoluteFiles.any { it.name.toLowerCase().contains("test") }) {
-//                    println("\t\tFixing IntelliJ test sourceSet: $name")
-//
-//                    idea(project) {
-//                        module { mod ->
-//                            println("MOD::: ${mod.name}")
-//                            println("\t\tsource:" + mod.sourceDirs)
-//                            println("\t\ttest:" + mod.testSourceDirs)
-//
-//                            mod.sourceDirs.removeAll(absoluteFiles)
-//                            mod.testSourceDirs.addAll(absoluteFiles)
-//
-//                            val scopeMap = mod.scopes["TEST"]
-////                                    += [ configurations.performanceTestCompile ]
-//
-//                            println("\t\tMod source:" + mod.sourceDirs)
-//                            println("\t\tMod test:" + mod.testSourceDirs)
-//                        }
-//                    }
-//                }
-////                    }
-//            }
-    }
-
-    /**
      * Change the source input from the opinionated sonatype paths to a simpler directory
      */
     fun fixMavenPaths() {
         // it is SUPER annoying to use the opinionated sonatype directory structure. I don't like it. We pass in the "configuration" action
         // instead of doing it a different way, so the creation AND configuration of these sorucesets can occur. (Otherwise they won't)
-        val configure: Action<SourceSetContainer> = Action {
-            val main = it.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
-            val test = it.named("test", org.gradle.api.tasks.SourceSet::class.java).get()
 
-            main.apply {
-                java.apply {
-                    setSrcDirs(project.files("src"))
-                    include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
-                }
+        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+        val main = sourceSets.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
+        val test = sourceSets.named("test", org.gradle.api.tasks.SourceSet::class.java).get()
 
-                if (hasKotlin) {
-                    main.kotlin {
-                        setSrcDirs(project.files("src"))
-                        include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
-                    }
-                }
-
-                resources.setSrcDirs(project.files("resources"))
+        main.apply {
+            java.apply {
+                setSrcDirs(project.files("src"))
+                include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
             }
 
-            test.apply {
-                java.apply {
+            if (hasKotlin) {
+                kotlin {
+                    setSrcDirs(project.files("src"))
+                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                }
+            }
+
+            resources.setSrcDirs(project.files("resources"))
+        }
+
+        test.apply {
+            java.apply {
+                setSrcDirs(project.files("test"))
+                include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+            }
+
+            if (hasKotlin) {
+                kotlin {
                     setSrcDirs(project.files("test"))
-                    include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
                 }
+            }
 
-                if (hasKotlin) {
-                    test.kotlin {
-                        setSrcDirs(project.files("test"))
-                        include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
-                    }
-                }
+            resources.setSrcDirs(project.files("testResources"))
+        }
+    }
 
-                resources.setSrcDirs(project.files("testResources"))
+    /**
+     * Fix the compiled output from intellij to be SEPARATE from gradle.
+     */
+    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
+        // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
+        idea(project) {
+            // https://youtrack.jetbrains.com/issue/IDEA-175172
+            module {
+                val mainDir = File(location)
+                it.outputDir = mainDir
+                it.testOutputDir = mainDir
+
+                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                it.isDownloadJavadoc = false
+                it.isDownloadSources = true
             }
         }
 
-        (project as org.gradle.api.plugins.ExtensionAware).extensions.configure("sourceSets", configure)
+        // this has the side-effect of NOT creating the gradle directories....
+
+        // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM! (but it is)
+        project.afterEvaluate { prj ->
+            val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
+            sourceSets.forEach { set ->
+                set.output.classesDirs.forEach { dir ->
+//                    println("Creating dir: ${dir.absolutePath}")
+                    if (!dir.exists()) {
+                        dir.mkdirs()
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -651,34 +620,18 @@ open class StaticMethodsAndTools(private val project: Project) {
         return fullId
     }
 
-    private fun idea(project: Project, configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
-            project.extensions.configure("idea", configure)
-
-    // required to make sure the plugins are correctly applied. ONLY applying it to the project WILL NOT work.
-    // The plugin must also be applied to the root project
-    private fun apply(project: Project, id: String) {
-        if (project.rootProject.pluginManager.findPlugin(id) == null) {
-            project.rootProject.pluginManager.apply(id)
-        }
-
-        if (project.pluginManager.findPlugin(id) == null) {
-            project.pluginManager.apply(id)
-        }
-    }
-
-
     /**
      * Load JPMS for a specific java version using the default configuration
      */
     fun jpms(javaVersion: JavaVersion): JavaXConfiguration {
-        return JavaXConfiguration(javaVersion, project)
+        return JavaXConfiguration(javaVersion, project, this)
     }
 
     /**
      * Load and configure JPMS for a specific java version
      */
     fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit): JavaXConfiguration {
-        val javaX = JavaXConfiguration(javaVersion, project)
+        val javaX = JavaXConfiguration(javaVersion, project, this)
         block(SourceSetContainer2(javaX))
         return javaX
     }

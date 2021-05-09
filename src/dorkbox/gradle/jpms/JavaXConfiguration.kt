@@ -21,14 +21,11 @@ import dorkbox.gradle.kotlin
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
-import org.gradle.api.internal.HasConvention
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
-import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 
@@ -42,14 +39,14 @@ import java.io.File
 //target/classes-java9 .
 
 @Suppress("MemberVisibilityCanBePrivate")
-class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project) {
+class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project, private val gradleUtils: StaticMethodsAndTools) {
     val ver: String = javaVersion.majorVersion
 
     // this cannot be ONLY a number, there must be something else -- intellij will *not* pickup the name if it's only a number
     val nameX = "_$ver"
 
     // If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
-    val hasKotlin: Boolean
+    val hasKotlin = gradleUtils.hasKotlin
 
     val moduleFile = project.projectDir.walkTopDown().find { it.name == "module-info.java" }
     var moduleName: String
@@ -83,7 +80,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
     // have to create a task in order to the files to get "picked up" by intellij/gradle. No *test* task? Then gradle/intellij won't be able run
     // the tests, even if you MANUALLY tell intellij to run a test from the sources dir
     // https://docs.gradle.org/current/dsl/org.gradle.api.tasks.testing.Test.html
-    val runTestX: Test = project.tasks.create("test${nameX}", Test::class.java)
+    val runTestX: Test = project.tasks.create("test${nameX}Test", Test::class.java)
 
     init {
         if (moduleFile == null) {
@@ -94,8 +91,6 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
         if (moduleName.isEmpty()) {
             throw GradleException("The module name must be specified in the module-info file! Verify file: $moduleFile")
         }
-
-        hasKotlin = StaticMethodsAndTools.hasKotlin(project)
 
         val info = when {
             hasKotlin -> "Initializing JPMS $ver, Java/Kotlin [$moduleName]"
@@ -109,11 +104,29 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
             compileTestKotlin = project.tasks.named("compileTestKotlin", KotlinCompile::class.java).get()
         }
 
-       // setup compile/runtime project dependencies
+        // make sure defaults are loaded
+        StaticMethodsAndTools.idea(project) {
+            if (module.sourceDirs == null) {
+                module.sourceDirs = setOf<File>()
+            }
+
+            if (module.testSourceDirs == null) {
+                module.testSourceDirs = setOf<File>()
+            }
+
+            if (module.testResourceDirs == null) {
+                module.testResourceDirs = setOf<File>()
+            }
+        }
+
+
+        // setup compile/runtime project dependencies
         mainX.apply {
+            val files = project.files("src$ver")
+
             java.apply {
                 // I don't like the opinionated sonatype directory structure.
-                setSrcDirs(project.files("src$ver"))
+                setSrcDirs(files)
                 include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
                 exclude("**/module-info.java", "**/EmptyClass.java") // we have to compile these in a different step!
 
@@ -122,21 +135,30 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
             if (hasKotlin) {
                 kotlin {
-                    setSrcDirs(project.files("src$ver"))
+                    setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 
                     // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
                 }
             }
 
-            resources.setSrcDirs(project.files("resources$ver"))
+            val resourceFiles = project.files("resources$ver")
+            resources.setSrcDirs(resourceFiles)
+
+            // weird "+=" way of writing this because .addAll didn't work
+            StaticMethodsAndTools.idea(project) {
+                module.sourceDirs = module.sourceDirs + files.files
+                module.resourceDirs = module.resourceDirs + resourceFiles.files
+            }
 
             compileClasspath += main.compileClasspath + main.output
             runtimeClasspath += main.runtimeClasspath + main.output + compileClasspath
         }
         testX.apply {
+            val files = project.files("test$ver")
+
             java.apply {
-                setSrcDirs(project.files("test$ver"))
+                setSrcDirs(files)
                 include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
 
                 // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
@@ -144,19 +166,25 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
             if (hasKotlin) {
                 kotlin {
-                    setSrcDirs(project.files("test$ver"))
+                    setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 
                     // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
                 }
             }
 
-            resources.setSrcDirs(project.files("testResources$ver"))
+            val resourceFiles = project.files("testResources$ver")
+            resources.setSrcDirs(resourceFiles)
+
+            // weird "+=" way of writing this because .addAll didn't work
+            StaticMethodsAndTools.idea(project) {
+                module.testSourceDirs = module.testSourceDirs + files.files
+                module.testResourceDirs = module.testResourceDirs + resourceFiles.files
+            }
 
             compileClasspath += mainX.compileClasspath + test.compileClasspath + test.output
             runtimeClasspath += mainX.runtimeClasspath + test.runtimeClasspath + test.output
         }
-
 
         // run the testX verification
         runTestX.apply {
@@ -169,7 +197,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
             // The directories for the compiled test sources.
             testClassesDirs = testX.output.classesDirs
-            classpath = testX.runtimeClasspath
+            classpath += testX.runtimeClasspath
         }
 
         //////////////
@@ -184,11 +212,14 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
 
         // have to setup the configurations, so dependencies work correctly
         val configs = project.configurations
+
         configs.maybeCreate("main${nameX}Implementation").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("compileOnly"))
         configs.maybeCreate("main${nameX}Runtime").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("runtimeOnly"))
+        configs.maybeCreate("main${nameX}CompileOnly").extendsFrom(configs.getByName("compileOnly"))
 
         configs.maybeCreate("test${nameX}Implementation").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testCompileOnly"))
         configs.maybeCreate("test${nameX}Runtime").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testRuntimeOnly"))
+        val testXCompile = configs.maybeCreate("test${nameX}CompileOnly").extendsFrom(configs.getByName("testCompileOnly"))
 
 
         // setup task graph and compile version
@@ -203,6 +234,11 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project)
             targetCompatibility = ver
         }
 
+        StaticMethodsAndTools.idea(project) {
+            // https://stackoverflow.com/questions/42064377/mark-gradle-source-folder-as-test-source-in-intellij
+            // https://youtrack.jetbrains.com/issue/IDEA-165647
+            module.scopes["TEST"]?.get("plus")?.add(testXCompile)
+        }
 
         if (hasKotlin) {
             compileMainXKotlin.apply {
