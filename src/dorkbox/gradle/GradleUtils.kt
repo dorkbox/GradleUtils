@@ -27,6 +27,7 @@ import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import java.net.URL
 
 
 /**
@@ -37,6 +38,13 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
  */
 class GradleUtils : Plugin<Project> {
     private lateinit var propertyMappingExtension: StaticMethodsAndTools
+
+    init {
+        // Disable JarURLConnections caching
+        URL("jar:file://dummy.jar!/").openConnection().defaultUseCaches = false
+    }
+
+
 
     override fun apply(project: Project) {
         println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
