@@ -151,8 +151,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 module.resourceDirs = module.resourceDirs + resourceFiles.files
             }
 
-            compileClasspath += main.compileClasspath + main.output
-            runtimeClasspath += main.runtimeClasspath + main.output + compileClasspath
+            compileClasspath += main.compileClasspath
+            runtimeClasspath += main.runtimeClasspath
         }
         testX.apply {
             val files = project.files("test$ver")
@@ -182,18 +182,17 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 module.testResourceDirs = module.testResourceDirs + resourceFiles.files
             }
 
-            compileClasspath += mainX.compileClasspath + test.compileClasspath + test.output
-            runtimeClasspath += mainX.runtimeClasspath + test.runtimeClasspath + test.output
+            compileClasspath += mainX.compileClasspath + test.compileClasspath
+            runtimeClasspath += mainX.runtimeClasspath + test.runtimeClasspath
         }
 
         // run the testX verification
         runTestX.apply {
-            dependsOn("test")
+//            dependsOn("test")
             description = "Runs Java $ver tests"
             group = "verification"
 
-            outputs.upToDateWhen { false }
-            shouldRunAfter("test")
+//            shouldRunAfter("test")
 
             // The directories for the compiled test sources.
             testClassesDirs = testX.output.classesDirs
@@ -219,7 +218,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
         configs.maybeCreate("test${nameX}Implementation").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testCompileOnly"))
         configs.maybeCreate("test${nameX}Runtime").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testRuntimeOnly"))
-        val testXCompile = configs.maybeCreate("test${nameX}CompileOnly").extendsFrom(configs.getByName("testCompileOnly"))
+        configs.maybeCreate("test${nameX}CompileOnly").extendsFrom(configs.getByName("testCompileOnly"))
 
 
         // setup task graph and compile version
@@ -232,12 +231,6 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             dependsOn(compileTestJava)
             sourceCompatibility = ver
             targetCompatibility = ver
-        }
-
-        StaticMethodsAndTools.idea(project) {
-            // https://stackoverflow.com/questions/42064377/mark-gradle-source-folder-as-test-source-in-intellij
-            // https://youtrack.jetbrains.com/issue/IDEA-165647
-            module.scopes["TEST"]?.get("plus")?.add(testXCompile)
         }
 
         if (hasKotlin) {
