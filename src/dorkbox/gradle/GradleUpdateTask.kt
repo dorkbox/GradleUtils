@@ -27,11 +27,18 @@ import java.net.URL
 
 open class
 GradleUpdateTask : DefaultTask() {
+    companion object {
+        val releaseText: String by lazy {
+            URL("https://services.gradle.org/versions/current").readText()
+        }
+
+        val foundGradleVersion: String? by lazy {
+            JSONObject(releaseText)["version"] as String?
+        }
+    }
+
     @TaskAction
     fun run() {
-        val releaseText = URL("https://services.gradle.org/versions/current").readText()
-        val foundGradleVersion = JSONObject(releaseText)["version"] as String?
-
         if (foundGradleVersion.isNullOrEmpty()) {
             println("\tUnable to detect New Gradle Version. Output json: $releaseText")
         }
