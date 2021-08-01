@@ -25,7 +25,7 @@ plugins {
     id("com.gradle.plugin-publish") version "0.14.0"
 
     id("com.dorkbox.Licensing") version "2.6"
-    id("com.dorkbox.VersionUpdate") version "2.3"
+    id("com.dorkbox.VersionUpdate") version "2.4"
     id("com.dorkbox.GradleUtils") version "2.5"
 
     kotlin("jvm") version "1.4.32"
@@ -35,14 +35,13 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "2.8"
+    const val version = "2.9"
 
     // set as project.ext
     const val name = "Gradle Utils"
     const val id = "GradleUtils"
     const val vendor = "Dorkbox LLC"
     const val url = "https://git.dorkbox.com/dorkbox/GradleUtils"
-    val tags = listOf("gradle", "update", "dependencies", "dependency management")
 
     val buildDate = Instant.now().toString()
 }
@@ -81,7 +80,7 @@ repositories {
 }
 
 dependencies {
-    // compile only, so we dont force kotlin/dsl version info into dependencies
+    // compile only, so we don't force kotlin/dsl version info into dependencies
 
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
@@ -130,7 +129,7 @@ pluginBundle {
             id = "${Extras.group}.${Extras.id}"
             displayName = Extras.name
             description = Extras.description
-            tags = Extras.tags
+            tags = listOf("gradle", "update", "dependencies", "dependency management")
             version = Extras.version
         }
     }

@@ -29,6 +29,7 @@ import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
+import java.security.MessageDigest
 import java.util.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
@@ -698,5 +699,83 @@ open class StaticMethodsAndTools(private val project: Project) {
 
     class AccessGroup(val sourceName: String, vararg targetNames: String) {
         val targetNames: Array<out String> = targetNames
+    }
+
+    // https://docs.oracle.com/javase/7/docs/api/java/security/MessageDigest.html
+    //  Every implementation of the Java platform is required to support the following standard MessageDigest algorithms:
+    //    MD5
+    //    SHA-1
+    //    SHA-256
+
+    fun md5(file: File?): ByteArray {
+        if (file == null || !file.canRead()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("MD5")
+        file.forEachBlock { bytes: ByteArray, bytesRead: Int ->
+            md.update(bytes, 0, bytesRead)
+        }
+        return md.digest()
+    }
+
+    fun md5(text: String?): ByteArray {
+        if (text.isNullOrEmpty()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("MD5")
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        md.update(bytes, 0, bytes.size)
+
+        return md.digest()
+    }
+
+    fun sha1(file: File?): ByteArray {
+        if (file == null || !file.canRead()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("SHA-1")
+        file.forEachBlock { bytes: ByteArray, bytesRead: Int ->
+            md.update(bytes, 0, bytesRead)
+        }
+        return md.digest()
+    }
+
+    fun sha1(text: String?): ByteArray {
+        if (text.isNullOrEmpty()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("SHA-1")
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        md.update(bytes, 0, bytes.size)
+
+        return md.digest()
+    }
+
+    fun sha256(file: File?): ByteArray {
+        if (file == null || !file.canRead()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("SHA-256")
+        file.forEachBlock { bytes: ByteArray, bytesRead: Int ->
+            md.update(bytes, 0, bytesRead)
+        }
+        return md.digest()
+    }
+
+    fun sha256(text: String?): ByteArray {
+        if (text.isNullOrEmpty()) {
+            return ByteArray(0)
+        }
+
+        val md = MessageDigest.getInstance("SHA-256")
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        md.update(bytes, 0, bytes.size)
+
+        return md.digest()
     }
 }
