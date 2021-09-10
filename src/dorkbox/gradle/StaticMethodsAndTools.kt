@@ -27,6 +27,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
+import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.security.MessageDigest
@@ -37,6 +38,7 @@ import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.declaredMemberProperties
 
 
+@Suppress("unused", "MemberVisibilityCanBePrivate")
 open class StaticMethodsAndTools(private val project: Project) {
     companion object {
         /**
@@ -48,20 +50,20 @@ open class StaticMethodsAndTools(private val project: Project) {
                 // check if plugin is available
                 project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
 
-                if (debug) println("\t Has kotlin plugin")
+                if (debug) println("\tHas kotlin plugin")
 
                 // this will check if the task exists, and throw an exception if it does not or return false
                 project.tasks.named("compileKotlin", KotlinCompile::class.java).orNull ?: return false
 
-                if (debug) println("\t Has compile kotlin task")
+                if (debug) println("\tHas compile kotlin task")
 
                 // check to see if we have any kotlin file
                 val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
                 val main = sourceSets.getByName("main")
 
                 if (debug) {
-                    println("\t main dirs: ${main.java.srcDirs}")
-                    println("\t kotlin dirs: ${main.kotlin.srcDirs}")
+                    println("\tmain dirs: ${main.java.srcDirs}")
+                    println("\tkotlin dirs: ${main.kotlin.srcDirs}")
 
                     project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
                         println("\t\t$it")
@@ -115,7 +117,7 @@ open class StaticMethodsAndTools(private val project: Project) {
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
-     * project, if have the same name relationship (ie: field name is "version", project method is "setVersion")
+     * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
      */
     fun load(propertyFile: String, targetObject: Any) {
         val kClass = targetObject::class
@@ -160,7 +162,7 @@ open class StaticMethodsAndTools(private val project: Project) {
 
                 // if we have a property name in our PROJECT, we set it
                 // project functions that can be called for setting properties
-                val setterName = "set${key.capitalize()}"
+                val setterName = "set${key.replaceFirstChar { it.titlecaseChar() }}"
                 propertyFunctions.find { prop -> prop.name == setterName }?.call(project, value)
 
                 // assign this as an "extra property"
@@ -176,7 +178,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             // assign target fields to our project (if our project has matching setters)
             assignedExtraProperties.forEach {
                 val propertyName = it.name
-                val setterName = "set${propertyName.capitalize()}"
+                val setterName = "set${propertyName.replaceFirstChar { it.titlecaseChar() }}"
 
                 val projectMethod = propertyFunctions.find { prop -> prop.name == setterName }
                 if (projectMethod != null) {
@@ -194,7 +196,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Validates the minimum version of gradle supported
      */
     fun minVersion(version: String) {
-        val compared = org.gradle.util.GradleVersion.current().compareTo(org.gradle.util.GradleVersion.version(version))
+        val compared = GradleVersion.current().compareTo(GradleVersion.version(version))
         if (compared == -1) {
             throw GradleException("This project requires Gradle $version or higher.")
         }
@@ -204,7 +206,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Validates the maximum version of gradle supported
      */
     fun maxVersion(version: String) {
-        val compared = org.gradle.util.GradleVersion.current().compareTo(org.gradle.util.GradleVersion.version(version))
+        val compared = GradleVersion.current().compareTo(GradleVersion.version(version))
         if (compared == 1) {
             throw GradleException("This project requires Gradle $version or lower.")
         }
@@ -419,7 +421,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             if (hasKotlin) {
-                kotlin {
+                kotlin.apply {
                     setSrcDirs(project.files("test"))
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
                 }
@@ -491,11 +493,15 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
      */
     fun defaultCompileOptions() {
-        project.tasks.withType(JavaCompile::class.java) {
-            it.options.encoding = "UTF-8"
-            it.options.isIncremental = true
-            it.options.compilerArgs.add("-Xpkginfo:always")
-        }
+        project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
+            override fun execute(task: Task) {
+                task as JavaCompile
+
+                task.options.encoding = "UTF-8"
+                task.options.isIncremental = true
+                task.options.compilerArgs.add("-Xpkginfo:always")
+            }
+        })
     }
 
     /**
@@ -506,12 +512,11 @@ open class StaticMethodsAndTools(private val project: Project) {
                              kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString()
-        val defaultKotlinVersion = "1.5.0"
+        val defaultKotlinVersion = "1.5.21"
 
         val kotlinVer: String = try {
             if (hasKotlin) {
-                val kot = project.plugins.findPlugin("org.jetbrains.kotlin.jvm") as org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapper?
-                val version = kot?.kotlinPluginVersion ?: defaultKotlinVersion
+                val version = project.getKotlinPluginVersion()
 
                 // we ONLY care about the major.minor
                 val secondDot = version.indexOf('.', version.indexOf('.')+1)
@@ -520,49 +525,69 @@ open class StaticMethodsAndTools(private val project: Project) {
                 defaultKotlinVersion
             }
         } catch (e: Exception) {
-            // in case we cannot parse it from the plugin, provide a reasonable default (latest stable)
+            // in case we cannot parse it from the plugin, provide a reasonable default (the latest stable)
             defaultKotlinVersion
         }
 
-        project.tasks.withType(JavaCompile::class.java) { task ->
-            task.doFirst {
-                println("\tCompiling classes to Java ${JavaVersion.toVersion(task.targetCompatibility)}")
+        // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
+        project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
+            override fun execute(task: Task) {
+                task as JavaCompile
+
+                task.doFirst(object: Action<Task> {
+                    override fun execute(it: Task) {
+                        it as JavaCompile
+                        println("\tCompiling classes to Java ${JavaVersion.toVersion(it.targetCompatibility)}")
+                    }
+                })
+
+                task.options.encoding = "UTF-8"
+
+                // -Xlint:deprecation
+                task.options.isDeprecation = true
+
+                // -Xlint:unchecked
+                task.options.compilerArgs.add("-Xlint:unchecked")
+
+                task.sourceCompatibility = javaVer
+                task.targetCompatibility = javaVer
             }
+        })
 
-            task.options.encoding = "UTF-8"
-
-            // -Xlint:deprecation
-            task.options.isDeprecation = true
-
-            // -Xlint:unchecked
-            task.options.compilerArgs.add("-Xlint:unchecked")
-
-            task.sourceCompatibility = javaVer
-            task.targetCompatibility = javaVer
-        }
-
-        project.tasks.withType(Jar::class.java) {
-            it.duplicatesStrategy = DuplicatesStrategy.FAIL
-        }
+        // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
+        project.tasks.withType(Jar::class.java, object: Action<Task> {
+            override fun execute(task: Task) {
+                task as Jar
+                task.duplicatesStrategy = DuplicatesStrategy.FAIL
+            }
+        })
 
         if (hasKotlin) {
-            project.tasks.withType(KotlinCompile::class.java) { task ->
-                task.doFirst {
-                    println("\tCompiling classes to Kotlin ${task.kotlinOptions.languageVersion}, Java ${task.kotlinOptions.jvmTarget}")
+            // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
+            project.tasks.withType(KotlinCompile::class.java, object: Action<Task> {
+                override fun execute(task: Task) {
+                    task as KotlinCompile
+
+                    task.doFirst(object: Action<Task> {
+                        override fun execute(it: Task) {
+                            it as KotlinCompile
+                            println("\tCompiling classes to Kotlin ${it.kotlinOptions.languageVersion}, Java ${it.kotlinOptions.jvmTarget}")
+                        }
+                    })
+
+                    task.sourceCompatibility = kotlinJavaVer
+                    task.targetCompatibility = kotlinJavaVer
+
+                    task.kotlinOptions.jvmTarget = kotlinJavaVer
+
+                    // default is whatever the version is that we are running, or XXXXX if we cannot figure it out
+                    task.kotlinOptions.apiVersion = kotlinVer
+                    task.kotlinOptions.languageVersion = kotlinVer
+
+                    // see: https://kotlinlang.org/docs/reference/using-gradle.html
+                    kotlinActions(task.kotlinOptions)
                 }
-
-                task.sourceCompatibility = kotlinJavaVer
-                task.targetCompatibility = kotlinJavaVer
-
-                task.kotlinOptions.jvmTarget = kotlinJavaVer
-
-                // default is whatever the version is that we are running, or 1.4.32 if we cannot figure it out
-                task.kotlinOptions.apiVersion = kotlinVer
-                task.kotlinOptions.languageVersion = kotlinVer
-
-                // see: https://kotlinlang.org/docs/reference/using-gradle.html
-                kotlinActions(task.kotlinOptions)
-            }
+            })
         }
     }
 
@@ -645,10 +670,13 @@ open class StaticMethodsAndTools(private val project: Project) {
     fun inferJpmsModule() {
         if (GradleVersion.current() >= GradleVersion.version("6.4")) {
             project.gradle.taskGraph.whenReady {
-                project.convention.configure(JavaPluginExtension::class.java) {
-                    // Should a --module-path be inferred by analysing JARs and class folders on the classpath?
-                    it.modularity.inferModulePath.set(true)
-                }
+                // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
+                project.convention.configure(JavaPluginExtension::class.java, object: Action<JavaPluginExtension> {
+                    override fun execute(task: JavaPluginExtension) {
+                        // Should a --module-path be inferred by analysing JARs and class folders on the classpath?
+                        task.modularity.inferModulePath.set(true)
+                    }
+                })
             }
         }
     }
@@ -679,10 +707,14 @@ open class StaticMethodsAndTools(private val project: Project) {
             // Make sure to cleanup the any possible license file on clean
             println("\tAllowing kotlin internal access for $moduleName")
 
-            project.tasks.withType(KotlinCompile::class.java).forEach {
-                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                it.kotlinOptions.moduleName = moduleName
-            }
+            // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
+            project.tasks.withType(KotlinCompile::class.java, object: Action<Task> {
+                override fun execute(task: Task) {
+                    task as KotlinCompile
+                    // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                    task.kotlinOptions.moduleName = moduleName
+                }
+            })
 
             accessGroup.forEach {
                 // allow code in a *different* directory access to "internal" scope members of code.
@@ -697,9 +729,7 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
     }
 
-    class AccessGroup(val sourceName: String, vararg targetNames: String) {
-        val targetNames: Array<out String> = targetNames
-    }
+    class AccessGroup(val sourceName: String, vararg val targetNames: String)
 
     // https://docs.oracle.com/javase/7/docs/api/java/security/MessageDigest.html
     //  Every implementation of the Java platform is required to support the following standard MessageDigest algorithms:
