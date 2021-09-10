@@ -16,16 +16,11 @@
 package dorkbox.gradle
 
 import dorkbox.gradle.deps.GetVersionInfoTask
-import dorkbox.gradle.jpms.JavaXConfiguration
-import org.gradle.api.DomainObjectCollection
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.SourceDirectorySet
-import org.gradle.api.plugins.JavaPlugin
-import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
-import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.net.URL
 
@@ -44,8 +39,6 @@ class GradleUtils : Plugin<Project> {
         URL("jar:file://dummy.jar!/").openConnection().defaultUseCaches = false
     }
 
-
-
     override fun apply(project: Project) {
         println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 
@@ -55,7 +48,7 @@ class GradleUtils : Plugin<Project> {
             group = "gradle"
             outputs.upToDateWhen { false }
             outputs.cacheIf { false }
-            description = "Automatically update GRADLE to the latest version"
+            description = "Automatically update Gradle to the latest version"
         }
 
         project.tasks.create("updateDependencies", GetVersionInfoTask::class.java).apply {
