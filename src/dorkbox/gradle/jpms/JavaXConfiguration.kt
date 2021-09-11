@@ -39,7 +39,7 @@ import java.io.File
 //target/classes-java9 .
 
 @Suppress("MemberVisibilityCanBePrivate")
-class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project, private val gradleUtils: StaticMethodsAndTools) {
+class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project, gradleUtils: StaticMethodsAndTools) {
     val ver: String = javaVersion.majorVersion
 
     // this cannot be ONLY a number, there must be something else -- intellij will *not* pickup the name if it's only a number
@@ -275,16 +275,16 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
             inputs.property("moduleName", moduleName)
 
-            destinationDir = compileMainXJava.destinationDir
+            destinationDirectory.set(compileMainXJava.destinationDirectory.asFile.orNull)
             classpath = this@JavaXConfiguration.project.files() // this resets the classpath. we use the module-path instead!
 
 
             // modules require this!
             doFirst {
                 val allCompiled = if (hasKotlin) {
-                    proj.files(compileMainJava.destinationDir, compileMainKotlin.destinationDir)
+                    proj.files(compileMainJava.destinationDirectory.asFile.orNull, compileMainKotlin.destinationDirectory.asFile.orNull)
                 } else {
-                    proj.files(compileMainJava.destinationDir)
+                    proj.files(compileMainJava.destinationDirectory.asFile.orNull)
                 }
 
                 // the SOURCE of the module-info.java file. It uses **EVERYTHING**
@@ -301,8 +301,10 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 val intellijClasses = File("${this@JavaXConfiguration.project.buildDir}/classes-intellij")
                 if (intellijClasses.exists()) {
                     // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
-                    val moduleInfo = destinationDir.walkTopDown().filter { it.name == "module-info.class" }.toList()
-                    val packageInfo = destinationDir.walkTopDown().filter { it.name == "package-info.class" }.toList()
+                    val directory = destinationDirectory.asFile.get()
+
+                    val moduleInfo = directory.walkTopDown().filter { it.name == "module-info.class" }.toList()
+                    val packageInfo = directory.walkTopDown().filter { it.name == "package-info.class" }.toList()
 
                     val name = when {
                         moduleInfo.isNotEmpty() && packageInfo.isNotEmpty() -> "module-info and package-info"
@@ -313,7 +315,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                     println("\tCopying $name files into the intellij classes location...")
 
                     moduleInfo.forEach {
-                        val newLocation = File(intellijClasses, it.relativeTo(destinationDir).path)
+                        val newLocation = File(intellijClasses, it.relativeTo(directory).path)
                         it.copyTo(newLocation, overwrite = true)
                     }
                 }
