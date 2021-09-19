@@ -17,7 +17,6 @@
 package dorkbox.gradle.jpms
 
 import dorkbox.gradle.StaticMethodsAndTools
-import dorkbox.gradle.kotlin
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
@@ -134,7 +133,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             }
 
             if (hasKotlin) {
-                kotlin {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+                kotlin.apply {
                     setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 
@@ -165,7 +165,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             }
 
             if (hasKotlin) {
-                kotlin {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test$ver").kotlin
+                kotlin.apply {
                     setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 

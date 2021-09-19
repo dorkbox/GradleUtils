@@ -60,17 +60,18 @@ open class StaticMethodsAndTools(private val project: Project) {
                 // check to see if we have any kotlin file
                 val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
                 val main = sourceSets.getByName("main")
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
 
                 if (debug) {
                     println("\tmain dirs: ${main.java.srcDirs}")
-                    println("\tkotlin dirs: ${main.kotlin.srcDirs}")
+                    println("\tkotlin dirs: ${kotlin.srcDirs}")
 
                     project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
                         println("\t\t$it")
                     }
                 }
 
-                val files = main.java.srcDirs + main.kotlin.srcDirs
+                val files = main.java.srcDirs + kotlin.srcDirs
                 files.forEach { srcDir ->
                     val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
                     if (kotlinFile?.exists() == true) {
@@ -405,7 +406,8 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             if (hasKotlin) {
-                kotlin {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+                kotlin.apply {
                     setSrcDirs(project.files("src"))
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
                 }
@@ -421,6 +423,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             if (hasKotlin) {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("test"))
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
@@ -730,6 +733,7 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     class AccessGroup(val sourceName: String, vararg val targetNames: String)
+
 
     // https://docs.oracle.com/javase/7/docs/api/java/security/MessageDigest.html
     //  Every implementation of the Java platform is required to support the following standard MessageDigest algorithms:

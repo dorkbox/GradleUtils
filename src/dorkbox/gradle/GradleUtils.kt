@@ -16,13 +16,19 @@
 package dorkbox.gradle
 
 import dorkbox.gradle.deps.GetVersionInfoTask
+import org.gradle.api.Action
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.CopySpec
 import org.gradle.api.file.SourceDirectorySet
-import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import java.io.*
 import java.net.URL
+import java.util.jar.JarEntry
+import java.util.jar.JarFile
+import java.util.jar.JarOutputStream
 
 
 /**
@@ -67,15 +73,104 @@ class GradleUtils : Plugin<Project> {
     }
 }
 
-// Fix defaults for gradle, since it's mildly retarded when it comes to kotlin, so we can have sane sourceset/configuration options
-// from: https://github.com/gradle/kotlin-dsl-samples/blob/201534f53d93660c273e09f768557220d33810a9/buildSrc/src/main/kotlin/build/KotlinPluginExtensions.kt
-val SourceSet.kotlin: SourceDirectorySet
-    get() =
-        (this as org.gradle.api.internal.HasConvention)
-                .convention
-                .getPlugin(KotlinSourceSet::class.java)
-                .kotlin
+fun org.gradle.api.Project.prepLibraries(): PrepLibrariesTask {
+    return this.tasks.maybeCreate("prepareLibraries", PrepLibrariesTask::class.java)
+}
 
-fun SourceSet.kotlin(action: SourceDirectorySet.() -> Unit) =
-        kotlin.action()
+fun org.gradle.api.Project.getDependenciesAsClasspath(): String {
+    return this.prepLibraries().getAsClasspath()
+}
 
+fun org.gradle.api.Project.getAllLibraries(): Map<File, String> {
+    return PrepLibrariesTask.collectLibraries(this.rootProject.allprojects.toTypedArray())
+}
+
+fun AbstractArchiveTask.copyLibraries(): Action<CopySpec> {
+    return this.project.prepLibraries().copyLibrariesTo()
+}
+
+fun AbstractArchiveTask.copyLibraries(vararg projects: Project): Action<CopySpec> {
+    return PrepLibrariesTask.copyLibrariesTo(projects)
+}
+
+fun AbstractArchiveTask.copyAllLibraries(): Action<CopySpec> {
+    return PrepLibrariesTask.copyLibrariesTo(this.project.rootProject.allprojects.toTypedArray())
+}
+
+fun AbstractArchiveTask.copyAllLibraries(projects: Collection<Project>): Action<CopySpec> {
+    return PrepLibrariesTask.copyLibrariesTo(projects.toTypedArray())
+}
+
+fun KotlinSourceSet.kotlin(action: SourceDirectorySet.() -> Unit) {
+    this.kotlin.apply {
+        action(this)
+    }
+}
+
+fun Project.getSourceFiles(type: String = "main"): Array<File> {
+    val ss = (this as org.gradle.api.plugins.ExtensionAware).extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer
+    val main = ss.named(type, org.gradle.api.tasks.SourceSet::class.java)
+    return main.get().allSource.map { it.absoluteFile }.toTypedArray()
+}
+
+/**
+ * Adds the specified files AS REGULAR FILES to the jar. NOTE: This is done in-memory...
+ *
+ * NOTE: The DEST path MUST BE IN UNIX FORMAT! If the path is windows format, it will BREAK in unforseen ways!
+ *
+ * @param filesToAdd First in pair is SOURCE file, second in pair is DEST (where the file goes in the jar) Directories are not included!
+ */
+@Throws(IOException::class)
+fun JarFile.addFilesToJar(filesToAdd: List<Pair<File, String>>) {
+    var entry: JarEntry
+
+    // we have to use a JarFile, so we preserve the comments that might already be in the file.
+    this.use { jarFile ->
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        JarOutputStream(BufferedOutputStream(byteArrayOutputStream)).use { jarOutputStream ->
+            // put the original entries into the new jar
+            // THIS DOES NOT MESS WITH THE ORDER OF THE FILES IN THE JAR!
+            val metaEntries = jarFile.entries()
+            while (metaEntries.hasMoreElements()) {
+                entry = metaEntries.nextElement()
+
+                // now add the entry to the jar (directories are never added to a jar)
+
+                if (!entry.isDirectory) {
+                    jarOutputStream.putNextEntry(entry)
+
+                    jarFile.getInputStream(entry).use { inputStream ->
+                        inputStream.copyTo(jarOutputStream)
+                    }
+
+                    jarOutputStream.flush()
+                    jarOutputStream.closeEntry()
+                }
+            }
+
+            // now add the files that we want to add.
+            for ((inputFile, destPath) in filesToAdd) {
+                entry = JarEntry(destPath)
+                entry.time = inputFile.lastModified()
+
+                // now add the entry to the jar
+                FileInputStream(inputFile).use { inputStream ->
+                    jarOutputStream.putNextEntry(entry)
+                    inputStream.copyTo(jarOutputStream)
+                }
+
+                jarOutputStream.flush()
+                jarOutputStream.closeEntry()
+            }
+
+            // finish the stream that we have been writing to
+            jarOutputStream.finish()
+        }
+
+
+        // overwrite the jar file with the new one
+        FileOutputStream(this.name, false).use { outputStream ->
+            byteArrayOutputStream.writeTo(outputStream)
+        }
+    }
+}
