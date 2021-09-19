@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import dorkbox.gradle.kotlin
 import java.time.Instant
 
 gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
@@ -73,53 +72,6 @@ sourceSets {
         }
     }
 }
-//
-//fun hasKotlin(project: Project, debug: Boolean = false): Boolean {
-//    try {
-//        // check if plugin is available
-//        project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
-//
-//        if (debug) println("\tHas kotlin plugin")
-//
-//        // this will check if the task exists, and throw an exception if it does not or return false
-//        project.tasks.named("compileKotlin", org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).orNull ?: return false
-//
-//        if (debug) println("\tHas compile kotlin task")
-//
-//        // check to see if we have any kotlin file
-//        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-//        val main = sourceSets.getByName("main")
-//
-//        project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin.apply {
-//            println("DIRS: ${this.srcDirs}")
-//        }
-//
-//        if (debug) {
-//            println("ASDASDSD")
-//            println("\tmain dirs: ${main.java.srcDirs}")
-//            println("\tkotlin dirs: ${main.kotlin.srcDirs}")
-//
-//            project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
-//                println("\t\t$it")
-//            }
-//        }
-//
-//        val files = main.java.srcDirs + main.kotlin.srcDirs
-//        files.forEach { srcDir ->
-//            val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
-//            if (kotlinFile?.exists() == true) {
-//                if (debug) println("\t Has kotlin file: $kotlinFile")
-//                return true
-//            }
-//        }
-//    } catch (e: Exception) {
-//        if (debug) e.printStackTrace()
-//    }
-//
-//    return false
-//}
-//
-//println("HASKOT = ${hasKotlin(project, true)}")
 
 repositories {
     mavenLocal()
