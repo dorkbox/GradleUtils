@@ -85,16 +85,16 @@ fun org.gradle.api.Project.getAllLibraries(): Map<File, String> {
     return PrepLibrariesTask.collectLibraries(this.rootProject.allprojects.toTypedArray())
 }
 
+fun org.gradle.api.Project.copyLibrariesTo(location: File) {
+    return this.project.prepLibraries().copyLibrariesTo(location)
+}
+
 fun AbstractArchiveTask.copyLibraries(): Action<CopySpec> {
     return this.project.prepLibraries().copyLibrariesTo()
 }
 
 fun AbstractArchiveTask.copyLibraries(vararg projects: Project): Action<CopySpec> {
     return PrepLibrariesTask.copyLibrariesTo(projects)
-}
-
-fun AbstractArchiveTask.copyLibrariesTo(location: File) {
-    return this.project.prepLibraries().copyLibrariesTo(location)
 }
 
 fun AbstractArchiveTask.copyAllLibraries(): Action<CopySpec> {
