@@ -107,12 +107,6 @@ fun KotlinSourceSet.kotlin(action: SourceDirectorySet.() -> Unit) {
     }
 }
 
-fun Project.getSourceFiles(type: String = "main"): Array<File> {
-    val ss = (this as org.gradle.api.plugins.ExtensionAware).extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer
-    val main = ss.named(type, org.gradle.api.tasks.SourceSet::class.java)
-    return main.get().allSource.map { it.absoluteFile }.toTypedArray()
-}
-
 /**
  * Adds the specified files AS REGULAR FILES to the jar. NOTE: This is done in-memory...
  *
