@@ -237,6 +237,22 @@ PrepLibrariesTask : DefaultTask() {
             }
         }
     }
+
+    fun copyLibrariesTo(location: File) {
+        if (!shouldRun(project)) {
+            return
+        }
+
+        val projLibraries = collectLibraries()
+        println("\tCopying libraries for ${project.name}")
+
+        synchronized(projLibraries) {
+            projLibraries.forEach { (file, fileName) ->
+                val newFile = location.resolve(fileName)
+                file.copyTo(newFile, overwrite = true )
+            }
+        }
+    }
 }
 
 //
