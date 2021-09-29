@@ -89,20 +89,8 @@ fun org.gradle.api.Project.copyLibrariesTo(location: File) {
     return this.project.prepLibraries().copyLibrariesTo(location)
 }
 
-fun AbstractArchiveTask.copyLibraries(): Action<CopySpec> {
-    return this.project.prepLibraries().copyLibrariesTo()
-}
-
-fun AbstractArchiveTask.copyLibraries(vararg projects: Project): Action<CopySpec> {
-    return PrepLibrariesTask.copyLibrariesTo(projects)
-}
-
-fun AbstractArchiveTask.copyAllLibraries(): Action<CopySpec> {
-    return PrepLibrariesTask.copyLibrariesTo(this.project.rootProject.allprojects.toTypedArray())
-}
-
-fun AbstractArchiveTask.copyAllLibraries(projects: Collection<Project>): Action<CopySpec> {
-    return PrepLibrariesTask.copyLibrariesTo(projects.toTypedArray())
+fun org.gradle.api.Project.copyAllLibrariesTo(location: File) {
+    return this.project.prepLibraries().copyLibrariesTo(location)
 }
 
 fun KotlinSourceSet.kotlin(action: SourceDirectorySet.() -> Unit) {
