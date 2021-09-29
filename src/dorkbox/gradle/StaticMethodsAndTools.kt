@@ -531,7 +531,6 @@ open class StaticMethodsAndTools(private val project: Project) {
             // in case we cannot parse it from the plugin, provide a reasonable default (the latest stable)
             defaultKotlinVersion
         }
-
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
         project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
             override fun execute(task: Task) {
@@ -558,10 +557,21 @@ open class StaticMethodsAndTools(private val project: Project) {
         })
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-        project.tasks.withType(Jar::class.java, object: Action<Task> {
+        project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Task> {
             override fun execute(task: Task) {
                 task as Jar
                 task.duplicatesStrategy = DuplicatesStrategy.FAIL
+
+                task.doLast(object: Action<Task> {
+                    override fun execute(task: Task) {
+                        task as Jar
+
+                        if (task.didWork) {
+                            val file = task.archiveFile.get().asFile
+                            println("\t${file.path}\n\tSize: ${file.length().toDouble() / (1_000 * 1_000)} MB")
+                        }
+                    }
+                })
             }
         })
 
@@ -722,7 +732,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             accessGroup.forEach {
                 // allow code in a *different* directory access to "internal" scope members of code.
                 // THIS FIXES GRADLE - BUT NOT INTELLIJ!
-                val kotlinExt = project.extensions.getByName("kotlin") as org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+                val kotlinExt = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java)
                 kotlinExt.target.compilations.getByName(it.sourceName).apply {
                     it.targetNames.forEach { targetName ->
                         associateWith(target.compilations.getByName(targetName))

@@ -17,14 +17,17 @@
 package dorkbox.gradle.jpms
 
 import dorkbox.gradle.StaticMethodsAndTools
-import org.gradle.api.GradleException
-import org.gradle.api.JavaVersion
-import org.gradle.api.Project
+import dorkbox.gradle.kotlin
+import org.gradle.api.*
+import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.CategoryFilter.exclude
+import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.CategoryFilter.include
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 
@@ -37,7 +40,7 @@ import java.io.File
 //jar --create --file mr.jar -C target/classes . --release 9 -C
 //target/classes-java9 .
 
-@Suppress("MemberVisibilityCanBePrivate")
+@Suppress("MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
 class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project, gradleUtils: StaticMethodsAndTools) {
     val ver: String = javaVersion.majorVersion
 
@@ -73,8 +76,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
     val compileModuleInfoX: JavaCompile = project.tasks.create("compileModuleInfo$nameX", JavaCompile::class.java)
 
-    lateinit var compileMainXKotlin: KotlinCompile
-    lateinit var compileTestXKotlin: KotlinCompile
+    lateinit var compileMainXKotlin: TaskProvider<KotlinCompile>
+    lateinit var compileTestXKotlin: TaskProvider<KotlinCompile>
 
     // have to create a task in order to the files to get "picked up" by intellij/gradle. No *test* task? Then gradle/intellij won't be able run
     // the tests, even if you MANUALLY tell intellij to run a test from the sources dir
@@ -123,18 +126,21 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
         mainX.apply {
             val files = project.files("src$ver")
 
-            java.apply {
-                // I don't like the opinionated sonatype directory structure.
-                setSrcDirs(files)
-                include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
-                exclude("**/module-info.java", "**/EmptyClass.java") // we have to compile these in a different step!
+            java(object: Action<SourceDirectorySet> {
+                override fun execute(t: SourceDirectorySet) {
+                    // I don't like the opinionated sonatype directory structure.
+                    t.setSrcDirs(files)
+                    t.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    t.exclude("**/module-info.java", "**/EmptyClass.java") // we have to compile these in a different step!
 
-                // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
-            }
+                    // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
+                }
+            })
 
             if (hasKotlin) {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
-                kotlin.apply {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main$nameX")
+
+                kotlin.kotlin {
                     setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 
@@ -154,19 +160,23 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             compileClasspath += main.compileClasspath
             runtimeClasspath += main.runtimeClasspath
         }
+
         testX.apply {
             val files = project.files("test$ver")
 
-            java.apply {
-                setSrcDirs(files)
-                include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+            java(object: Action<SourceDirectorySet> {
+                override fun execute(t: SourceDirectorySet) {
+                    t.setSrcDirs(files)
+                    t.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
 
-                // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
-            }
+                    // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
+                }
+            })
 
             if (hasKotlin) {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test$ver").kotlin
-                kotlin.apply {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test$nameX")
+
+                kotlin.kotlin {
                     setSrcDirs(files)
                     include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
 
@@ -206,8 +216,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
         //////////////
 
         if (hasKotlin) {
-            compileMainXKotlin = project.tasks.named("compileMain${nameX}Kotlin", KotlinCompile::class.java).get()
-            compileTestXKotlin = project.tasks.named("compileTest${nameX}Kotlin", KotlinCompile::class.java).get()
+            compileMainXKotlin = project.tasks.named("compileMain${nameX}Kotlin", KotlinCompile::class.java)
+            compileTestXKotlin = project.tasks.named("compileTest${nameX}Kotlin", KotlinCompile::class.java)
         }
 
         // have to setup the configurations, so dependencies work correctly
@@ -235,23 +245,31 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
         }
 
         if (hasKotlin) {
-            compileMainXKotlin.apply {
-                dependsOn(compileMainKotlin)
-                sourceCompatibility = ver
-                targetCompatibility = ver
-                kotlinOptions.jvmTarget = ver
-                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                kotlinOptions.moduleName = project.name
-            }
+            compileMainXKotlin.configure(object: Action<KotlinCompile> {
+                override fun execute(t: KotlinCompile) {
+                    t.dependsOn(compileMainKotlin)
 
-            compileTestXKotlin.apply {
-                dependsOn(compileTestKotlin)
-                sourceCompatibility = ver
-                targetCompatibility = ver
-                kotlinOptions.jvmTarget = ver
-                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                kotlinOptions.moduleName = project.name
-            }
+                    t.sourceCompatibility = ver
+                    t.targetCompatibility = ver
+
+                    t.kotlinOptions.jvmTarget = ver
+                    // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                    t.kotlinOptions.moduleName = project.name
+                }
+            })
+
+            compileTestXKotlin.configure(object: Action<KotlinCompile> {
+                override fun execute(t: KotlinCompile) {
+                    t.dependsOn(compileTestKotlin)
+
+                    t.sourceCompatibility = ver
+                    t.targetCompatibility = ver
+
+                    t.kotlinOptions.jvmTarget = ver
+                    // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                    t.kotlinOptions.moduleName = project.name
+                }
+            })
         }
 
         compileModuleInfoX.apply {
@@ -281,46 +299,54 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
 
             // modules require this!
-            doFirst {
-                val allCompiled = if (hasKotlin) {
-                    proj.files(compileMainJava.destinationDirectory.asFile.orNull, compileMainKotlin.destinationDirectory.asFile.orNull)
-                } else {
-                    proj.files(compileMainJava.destinationDirectory.asFile.orNull)
-                }
+            doFirst(object: Action<Task> {
+                override fun execute(task: Task) {
+                    task as JavaCompile
 
-                // the SOURCE of the module-info.java file. It uses **EVERYTHING**
-                options.sourcepath = allSource
-                options.compilerArgs.addAll(listOf(
-                    "-implicit:none",
-                    "-Xpkginfo:always",  // compile the package-info.java files as well (normally it does not)
-                    "--module-path", main.compileClasspath.asPath,
-                    "--patch-module", "$moduleName=" + allCompiled.asPath // add our existing, compiled classes so module-info can find them
-                ))
-            }
-
-            doLast {
-                val intellijClasses = File("${this@JavaXConfiguration.project.buildDir}/classes-intellij")
-                if (intellijClasses.exists()) {
-                    // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
-                    val directory = destinationDirectory.asFile.get()
-
-                    val moduleInfo = directory.walkTopDown().filter { it.name == "module-info.class" }.toList()
-                    val packageInfo = directory.walkTopDown().filter { it.name == "package-info.class" }.toList()
-
-                    val name = when {
-                        moduleInfo.isNotEmpty() && packageInfo.isNotEmpty() -> "module-info and package-info"
-                        moduleInfo.isNotEmpty() && packageInfo.isEmpty() -> "module-info"
-                        else -> "package-info"
+                    val allCompiled = if (hasKotlin) {
+                        proj.files(compileMainJava.destinationDirectory.asFile.orNull, compileMainKotlin.destinationDirectory.asFile.orNull)
+                    } else {
+                        proj.files(compileMainJava.destinationDirectory.asFile.orNull)
                     }
 
-                    println("\tCopying $name files into the intellij classes location...")
+                    // the SOURCE of the module-info.java file. It uses **EVERYTHING**
+                    task.options.sourcepath = allSource
+                    task.options.compilerArgs.addAll(listOf(
+                        "-implicit:none",
+                        "-Xpkginfo:always",  // compile the package-info.java files as well (normally it does not)
+                        "--module-path", main.compileClasspath.asPath,
+                        "--patch-module", "$moduleName=" + allCompiled.asPath // add our existing, compiled classes so module-info can find them
+                    ))
+                }
+            })
 
-                    moduleInfo.forEach {
-                        val newLocation = File(intellijClasses, it.relativeTo(directory).path)
-                        it.copyTo(newLocation, overwrite = true)
+            doLast(object: Action<Task> {
+                override fun execute(task: Task) {
+                    task as JavaCompile
+
+                    val intellijClasses = File("${this@JavaXConfiguration.project.buildDir}/classes-intellij")
+                    if (intellijClasses.exists()) {
+                        // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
+                        val directory = task.destinationDirectory.asFile.get()
+
+                        val moduleInfo = directory.walkTopDown().filter { it.name == "module-info.class" }.toList()
+                        val packageInfo = directory.walkTopDown().filter { it.name == "package-info.class" }.toList()
+
+                        val name = when {
+                            moduleInfo.isNotEmpty() && packageInfo.isNotEmpty() -> "module-info and package-info"
+                            moduleInfo.isNotEmpty() && packageInfo.isEmpty() -> "module-info"
+                            else -> "package-info"
+                        }
+
+                        println("\tCopying $name files into the intellij classes location...")
+
+                        moduleInfo.forEach {
+                            val newLocation = File(intellijClasses, it.relativeTo(directory).path)
+                            it.copyTo(newLocation, overwrite = true)
+                        }
                     }
                 }
-            }
+            })
         }
 
         project.tasks.named("jar", Jar::class.java).get().apply {
@@ -337,24 +363,28 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             val sourcePaths = mainX.output.classesDirs.map {it.absolutePath}.toSet()
 //            println("SOURCE PATHS+ $sourcePaths")
 
-            doFirst {
-                // this is how to correctly RE-MAP the location of files in jar
-                eachFile { details ->
-                    val absolutePath = details.file.absolutePath
-                    val length = details.path.length + 1
+            doFirst(object: Action<Task> {
+                override fun execute(task: Task) {
+                    task as org.gradle.jvm.tasks.Jar
 
-                    val sourceDir = absolutePath.substring(0, absolutePath.length - length)
+                    // this is how to correctly RE-MAP the location of files in jar
+                    task.eachFile { details ->
+                        val absolutePath = details.file.absolutePath
+                        val length = details.path.length + 1
 
-//                    println("checking file: $absolutePath")
-//                    println("checking file: $sourceDir")
+                        val sourceDir = absolutePath.substring(0, absolutePath.length - length)
 
-                    if (sourcePaths.contains(sourceDir)) {
-//                        println("Moving: " + absolutePath)
-//                        println("      : " + details.path)
-                        details.path = "META-INF/versions/${ver}/${details.path}"
+                        // println("checking file: $absolutePath")
+                        // println("checking file: $sourceDir")
+
+                        if (sourcePaths.contains(sourceDir)) {
+                            // println("Moving: " + absolutePath)
+                            // println("      : " + details.path)
+                            details.path = "META-INF/versions/${ver}/${details.path}"
+                        }
                     }
                 }
-            }
+            })
 
             // this is required for making the java 9+ multi-release version possible
             manifest.attributes["Multi-Release"] = "true"
