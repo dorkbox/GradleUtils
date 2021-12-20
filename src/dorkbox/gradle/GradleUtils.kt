@@ -43,9 +43,9 @@ class GradleUtils : Plugin<Project> {
 
     override fun apply(project: Project) {
         val current = GradleVersion.current()
-        if (current < GradleVersion.version("7")) {
+        if (current < GradleVersion.version("7.0")) {
             // we require v7+ of gradle to use this version of the util project.
-            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 7+ to continue.")
+            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 7.0+ to continue.")
         }
 
 
