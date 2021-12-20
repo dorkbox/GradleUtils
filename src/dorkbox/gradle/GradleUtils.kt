@@ -16,13 +16,9 @@
 package dorkbox.gradle
 
 import dorkbox.gradle.deps.GetVersionInfoTask
-import org.gradle.api.Action
-import org.gradle.api.JavaVersion
-import org.gradle.api.Plugin
-import org.gradle.api.Project
-import org.gradle.api.file.CopySpec
+import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
-import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
 import java.net.URL
@@ -46,6 +42,13 @@ class GradleUtils : Plugin<Project> {
     }
 
     override fun apply(project: Project) {
+        val current = GradleVersion.current()
+        if (current < GradleVersion.version("7")) {
+            // we require v7+ of gradle to use this version of the util project.
+            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 7+ to continue.")
+        }
+
+
         println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
