@@ -41,6 +41,8 @@ import kotlin.reflect.full.declaredMemberProperties
 @Suppress("unused", "MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
 open class StaticMethodsAndTools(private val project: Project) {
     companion object {
+        const val defaultKotlinVersion = "1.6.10"
+
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
          * NOTE: This can ONLY be called from a task, it cannot be called globally!
@@ -177,16 +179,17 @@ open class StaticMethodsAndTools(private val project: Project) {
             }}
 
             // assign target fields to our project (if our project has matching setters)
-            assignedExtraProperties.forEach {
-                val propertyName = it.name
+            assignedExtraProperties.forEach { prop ->
+                val propertyName = prop.name
                 val setterName = "set${propertyName.replaceFirstChar { it.titlecaseChar() }}"
 
-                val projectMethod = propertyFunctions.find { prop -> prop.name == setterName }
+                val projectMethod = propertyFunctions.find { it.name == setterName }
                 if (projectMethod != null) {
-                    if (it.getter.property.isConst) {
-                        projectMethod.call(project, it.getter.call())
+                    val getter = prop.getter
+                    if (getter.property.isConst) {
+                        projectMethod.call(project, getter.call())
                     } else {
-                        projectMethod.call(project, it.getter.call(kClass.objectInstance))
+                        projectMethod.call(project, getter.call(kClass.objectInstance))
                     }
                 }
             }
@@ -221,7 +224,10 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun getProjectRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
         val repositories = mutableListOf<String>()
-        project.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>().forEach { repo ->
+        val instance = project.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
+
+        @Suppress("DuplicatedCode")
+        instance.forEach { repo ->
             val resolver = repo.createResolver()
             if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
                 // println("searching ${resolver.name}")
@@ -240,7 +246,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                             // the root doesn't always end with a '/', and we must guarantee that
                             repositories.add("$toURL/")
                         }
-                    } catch (e: Exception) {
+                    } catch (ignored: Exception) {
                     }
                 }
             }
@@ -256,9 +262,10 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun getProjectBuildScriptRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
         val repositories = mutableListOf<String>()
-        project.buildscript.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
-            .forEach {
-                repo ->
+        val instance = project.buildscript.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
+
+        @Suppress("DuplicatedCode")
+        instance.forEach { repo ->
             val resolver = repo.createResolver()
             if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
                 // println("searching ${resolver.name}")
@@ -277,7 +284,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                             // the root doesn't always end with a '/', and we must guarantee that
                             repositories.add("$toURL/")
                         }
-                    } catch (e: Exception) {
+                    } catch (ignored: Exception) {
                     }
                 }
             }
@@ -515,7 +522,6 @@ open class StaticMethodsAndTools(private val project: Project) {
                              kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString()
-        val defaultKotlinVersion = "1.5.21"
 
         val kotlinVer: String = try {
             if (hasKotlin) {
@@ -620,7 +626,7 @@ open class StaticMethodsAndTools(private val project: Project) {
         // org.eclipse.swt.gtk.linux.x86
         // org.eclipse.swt.gtk.linux.x86_64
 
-        // macoxs
+        // macos
         // org.eclipse.swt.cocoa.macosx.x86_64
 
         val currentOS = org.gradle.internal.os.OperatingSystem.current()
@@ -644,12 +650,12 @@ open class StaticMethodsAndTools(private val project: Project) {
             fixedSWT = true
 
             project.configurations.all { config ->
-                config.resolutionStrategy { strat ->
-                    strat.dependencySubstitution { sub ->
+                config.resolutionStrategy { strategy ->
+                    strategy.dependencySubstitution { sub ->
                         // The maven property ${osgi.platform} is not handled by Gradle for the SWT builds
                         // so we replace the dependency, using the osgi platform from the project settings
                         sub.substitute(sub.module("org.eclipse.platform:org.eclipse.swt.\${osgi.platform}"))
-                            .with(sub.module(fullId))
+                            .using(sub.module(fullId))
                     }
                 }
             }
@@ -672,26 +678,6 @@ open class StaticMethodsAndTools(private val project: Project) {
         val javaX = JavaXConfiguration(javaVersion, project, this)
         block(SourceSetContainer2(javaX))
         return javaX
-    }
-
-
-    /**
-     * Should gradle try to infer that this project is a JPMS module by analysing JARs and the classpath?
-     *
-     * Only possible for gradle >= 6.4
-     */
-    fun inferJpmsModule() {
-        if (GradleVersion.current() >= GradleVersion.version("6.4")) {
-            project.gradle.taskGraph.whenReady {
-                // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-                project.convention.configure(JavaPluginExtension::class.java, object: Action<JavaPluginExtension> {
-                    override fun execute(task: JavaPluginExtension) {
-                        // Should a --module-path be inferred by analysing JARs and class folders on the classpath?
-                        task.modularity.inferModulePath.set(true)
-                    }
-                })
-            }
-        }
     }
 
     /**
