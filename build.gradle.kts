@@ -21,11 +21,11 @@ plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "0.14.0"
+    id("com.gradle.plugin-publish") version "0.18.0"
 
-    id("com.dorkbox.Licensing") version "2.9.2"
+    id("com.dorkbox.Licensing") version "2.10"
     id("com.dorkbox.VersionUpdate") version "2.4"
-    id("com.dorkbox.GradleUtils") version "2.9"
+    id("com.dorkbox.GradleUtils") version "2.14"
 
     kotlin("jvm") version "1.5.21"
 }
@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "2.14"
+    const val version = "2.15"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -85,7 +85,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // for parsing JSON
-    implementation("org.json:json:20210307")
+    implementation("org.json:json:20211205")
 
     // for parsing version information from maven
     implementation("com.dorkbox:Version:2.4")
@@ -128,7 +128,7 @@ pluginBundle {
             id = "${Extras.group}.${Extras.id}"
             displayName = Extras.name
             description = Extras.description
-            tags = listOf("gradle", "update", "dependencies", "dependency management")
+            tags = listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management")
             version = Extras.version
         }
     }
