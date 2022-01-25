@@ -176,7 +176,7 @@ GetVersionInfoTask : DefaultTask() {
                                     }
                                 }
                             }
-                        } catch (e: Exception) {
+                        } catch (ignored: Exception) {
                         }
                     }
                 }
