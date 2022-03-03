@@ -521,7 +521,17 @@ open class StaticMethodsAndTools(private val project: Project) {
                              kotlinJavaVersion: JavaVersion = javaVersion,
                              kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
-        val kotlinJavaVer = kotlinJavaVersion.toString()
+        val kotlinJavaVer = kotlinJavaVersion.toString().also {
+            if (it.startsWith("1.")) {
+                if (it == "1.6" || it == "1.8") {
+                    it
+                } else {
+                    it.substring(2)
+                }
+            } else {
+                it
+            }
+        }
 
         val kotlinVer: String = try {
             if (hasKotlin) {
