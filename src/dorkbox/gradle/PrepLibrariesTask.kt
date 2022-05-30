@@ -21,16 +21,20 @@ import org.gradle.api.Project
 import org.gradle.api.file.CopySpec
 import org.gradle.api.tasks.TaskAction
 import java.io.File
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 open class
 PrepLibrariesTask : DefaultTask() {
 
     companion object {
+        private val lock = ReentrantReadWriteLock()
         private val allLibraries = mutableMapOf<String, MutableMap<File, String>>()
         private val allProjectLibraries = mutableMapOf<File, String>()
 
         fun projectLibs(project: Project): MutableMap<File, String> {
-            synchronized(allLibraries) {
+            lock.read {
                 val key = project.name
                 val map = allLibraries[key]
 
@@ -45,22 +49,23 @@ PrepLibrariesTask : DefaultTask() {
         }
 
         fun collectLibraries(projects: Array<out Project>): Map<File, String> {
-            if (allProjectLibraries.isNotEmpty()) {
-                return allProjectLibraries
+            lock.read {
+                if (allProjectLibraries.isNotEmpty()) {
+                    return allProjectLibraries
+                }
             }
-
             println("\tCollecting all libraries for: ${projects.joinToString(",") { it.name }}")
 
-            val librariesByFileName = mutableMapOf<String, File>()
+            lock.write {
+                val librariesByFileName = mutableMapOf<String, File>()
 
-            synchronized(allProjectLibraries) {
                 projects.forEach { project ->
                     val tools = StaticMethodsAndTools(project)
                     collectLibs(tools, project, allProjectLibraries, librariesByFileName)
                 }
-            }
 
-            return allProjectLibraries
+                return allProjectLibraries
+            }
         }
 
         fun copyLibrariesTo(projects: Array<out Project>): Action<CopySpec> {
@@ -170,7 +175,7 @@ PrepLibrariesTask : DefaultTask() {
 
         val librariesByFileName = mutableMapOf<String, File>()
 
-        synchronized(projectLibs) {
+        lock.write {
             collectLibs(tools, project, projectLibs, librariesByFileName)
         }
 
@@ -192,19 +197,24 @@ PrepLibrariesTask : DefaultTask() {
 
         val resolveAllDependencies = tools.resolveRuntimeDependencies(project).dependencies
         // we must synchronize on it for thread safety
-        synchronized(allLibraries) {
+        lock.read {
             resolveAllDependencies.forEach { dep ->
                 dep.artifacts.forEach { artifact ->
                     val file = artifact.file
 
                     // get the file info from the reverse lookup, because we might have mangled the filename!
-                    val cacheFileName = projLibraries[file]!!
-                    libraries[cacheFileName] = file
+                    val cacheFileName = projLibraries[file]
+                    if (cacheFileName == null) {
+                        println("\tUnable to find: $file")
+                        println("\\tExisting: ${projLibraries.map { it.key }.joinToString()}")
+                    } else {
+                        libraries[cacheFileName] = file
+                    }
                 }
             }
-        }
 
-        return libraries.keys.sorted().joinToString(prefix = "lib/", separator = " lib/", postfix = "\r\n")
+            return libraries.keys.sorted().joinToString(prefix = "lib/", separator = " lib/", postfix = "\r\n")
+        }
     }
 
     // NOTE: This must be referenced via a TASK, otherwise it will not work.
@@ -227,12 +237,10 @@ PrepLibrariesTask : DefaultTask() {
         val projLibraries = collectLibraries()
         println("\tCopying libraries for ${project.name}")
 
-        synchronized(projLibraries) {
-            projLibraries.forEach { (file, fileName) ->
-                copySpec.from(file) {
-                    it.rename {
-                        fileName
-                    }
+        projLibraries.forEach { (file, fileName) ->
+            copySpec.from(file) {
+                it.rename {
+                    fileName
                 }
             }
         }
@@ -246,92 +254,9 @@ PrepLibrariesTask : DefaultTask() {
         val projLibraries = collectLibraries()
         println("\tCopying libraries for ${project.name}")
 
-        synchronized(projLibraries) {
-            projLibraries.forEach { (file, fileName) ->
-                val newFile = location.resolve(fileName)
-                file.copyTo(newFile, overwrite = true )
-            }
+        projLibraries.forEach { (file, fileName) ->
+            val newFile = location.resolve(fileName)
+            file.copyTo(newFile, overwrite = true )
         }
     }
 }
-
-//
-////////////////////
-//// Build jars that are for "netref/teacherpanel".
-////   NOTE: we cannot include bouncycastle in the jar -- because the bouncycastle jar is signed! (and it will screw up our jar, or not work)
-////   NOTE: shadowjars DO NOT work (possibly because we rely on external jars. The "Class-Path" manifest value was ignored for some reason.
-////   NOTE: OneJar/UnoJar/etc packaging solutions DO NOT work because VAADIN has terrible 'am i in a jar?' testing, which breaks when using this
-////  we use shadowjar for screenshare/etc -- NOT FOR THE CORE SERVER OR FRONTEND
-////////////////////
-//
-//val allLibrariesRev = mutableMapOf<File, String>()
-//
-//val prepLibraries = tasks.create("prepare_jar_libraries") {
-//    group = "$netrefgroupName support"
-//    RFC4519Style.description = "Prepares and checks the libraries used by all projects."
-//
-//    outputs.cacheIf { false }
-//    outputs.upToDateWhen { false }
-//
-//    // make sure all projects and subprojects are considered
-//    val recursion = LinkedList<Project>()
-//    val projects = mutableSetOf<Project>()
-//    recursion.add(rootProject)
-//
-//    var next: Project
-//    while (recursion.isNotEmpty()) {
-//        next = recursion.poll()
-//        projects.add(next)
-//        recursion.addAll(next.subprojects)
-//    }
-//
-//    val librariesByFileName = mutableMapOf<String, File>()
-//    synchronized(allLibrariesRev) {
-//        projects.forEach { subProject ->
-//            val resolveAllDependencies = resolveAllDependencies(subProject).flatMap { it.artifacts }
-//            resolveAllDependencies.forEach { artifact ->
-//                val file = artifact.file
-//                var fileName = file.name
-//
-//                while (librariesByFileName.containsKey(fileName)) {
-//                    // whoops! this is not good! Rename the file so it will be included. THIS PROBLEM ACTUALLY EXISTS, and is by accident!
-//                    // if the target FILE is the same file (as the filename) then it's OK for this to be a duplicate
-//                    if (file != librariesByFileName[fileName]) {
-//                        val randomNum = (1..100).shuffled().first()
-//                        fileName = "${file.nameWithoutExtension}_DUP_$randomNum.${file.extension}"
-//                        println("\tTarget file exists already! Renaming to $fileName")
-//                    } else {
-//                        // the file name and path are the same, meaning this is just a duplicate library
-//                        // instead of a DIFFERENT library with the same library file name.
-//                        break
-//                    }
-//                }
-//
-//                // println("adding: " + file)
-//                librariesByFileName[fileName] = file
-//                allLibrariesRev[file] = fileName
-//            }
-//        }
-//    }
-//}
-//
-//// get all jars needed on the library classpath, for RUNTIME (this is placed in the jar manifest)
-//// NOTE: This must be referenced via a TASK, otherwise it will not work.
-//fun getJarLibraryClasspath(project: Project): String {
-//    val libraries = mutableMapOf<String, File>()
-//
-//    val resolveAllDependencies = resolveRuntimeDependencies(project).dependencies
-//    synchronized(allLibrariesRev) { // not actually USING "allLibraries", but we must synchronize on it for thread safety
-//        resolveAllDependencies.forEach { dep ->
-//            dep.artifacts.forEach { artifact ->
-//                val file = artifact.file
-//
-//                // get the file info from the reverse lookup, because we might have mangled the filename!
-//                val cacheFileName = allLibrariesRev[file]!!
-//                libraries[cacheFileName] = file
-//            }
-//        }
-//    }
-//
-//    return libraries.keys.sorted().joinToString(prefix = "lib/", separator = " lib/", postfix = "\r\n")
-//}
