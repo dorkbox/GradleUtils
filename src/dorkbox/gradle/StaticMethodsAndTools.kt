@@ -547,6 +547,8 @@ open class StaticMethodsAndTools(private val project: Project) {
             // in case we cannot parse it from the plugin, provide a reasonable default (the latest stable)
             defaultKotlinVersion
         }
+
+
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
         project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
             override fun execute(task: Task) {
@@ -604,8 +606,6 @@ open class StaticMethodsAndTools(private val project: Project) {
                         }
                     })
 
-                    task.sourceCompatibility = kotlinJavaVer
-                    task.targetCompatibility = kotlinJavaVer
 
                     task.kotlinOptions.jvmTarget = kotlinJavaVer
 

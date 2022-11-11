@@ -249,10 +249,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 override fun execute(t: KotlinCompile) {
                     t.dependsOn(compileMainKotlin)
 
-                    t.sourceCompatibility = ver
-                    t.targetCompatibility = ver
-
                     t.kotlinOptions.jvmTarget = ver
+
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
                     t.kotlinOptions.moduleName = project.name
                 }
@@ -262,10 +260,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 override fun execute(t: KotlinCompile) {
                     t.dependsOn(compileTestKotlin)
 
-                    t.sourceCompatibility = ver
-                    t.targetCompatibility = ver
-
                     t.kotlinOptions.jvmTarget = ver
+
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
                     t.kotlinOptions.moduleName = project.name
                 }
