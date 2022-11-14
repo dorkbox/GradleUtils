@@ -361,7 +361,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
             doFirst(object: Action<Task> {
                 override fun execute(task: Task) {
-                    task as org.gradle.jvm.tasks.Jar
+                    task as Jar
 
                     // this is how to correctly RE-MAP the location of files in jar
                     task.eachFile { details ->
