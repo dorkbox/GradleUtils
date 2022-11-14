@@ -60,6 +60,13 @@ class GradleUtils : Plugin<Project> {
             description = "Automatically update Gradle to the latest version"
         }
 
+        project.tasks.create("checkGradleVersion", GradleCheckTask::class.java).apply {
+            group = "gradle"
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+            description = "Gets both the latest and currently installed Gradle versions"
+        }
+
         project.tasks.create("updateDependencies", GetVersionInfoTask::class.java).apply {
             group = "gradle"
             outputs.upToDateWhen { false }
