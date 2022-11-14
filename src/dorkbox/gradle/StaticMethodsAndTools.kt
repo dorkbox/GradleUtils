@@ -416,7 +416,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("src"))
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
                 }
             }
 
@@ -433,7 +433,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("test"))
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
                 }
             }
 
@@ -445,7 +445,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
-        // put idea in it's place! Not having this causes SO MANY PROBLEMS when building modules
+        // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
         idea(project) {
             // https://youtrack.jetbrains.com/issue/IDEA-175172
             module {
