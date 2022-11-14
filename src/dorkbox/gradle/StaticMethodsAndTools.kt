@@ -19,10 +19,11 @@ import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import org.gradle.api.*
+import org.gradle.api.execution.TaskExecutionGraph
 import org.gradle.api.file.DuplicatesStrategy
-import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
@@ -446,6 +447,7 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
         // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
+//        println("Setting intellij Compile location to: $location")
         idea(project) {
             // https://youtrack.jetbrains.com/issue/IDEA-175172
             module {
@@ -460,20 +462,41 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
 
         // this has the side-effect of NOT creating the gradle directories....
+        // also... if we CLEAN the project, the STANDARD build dir is DELETED. This messes up mixed kotlin + java projects, because the
+        // INTELLIJ compiler will compile the GRADLE classes (not the intellij classes) to the WRONG location!
+        //   This appears to be triggered by a file watcher on the build dir.
+        //   A subsequent problem created by this, is when we go to compile an archive (jar/etc) NORMALLY (via gradle)... there will be duplicates!
+        val hasClean = project.gradle.startParameter.taskNames.filter { taskName ->
+            taskName.lowercase(Locale.getDefault()).contains("clean")
+        }
 
-        // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM! (but it is)
-        project.afterEvaluate { prj ->
-            val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
-            sourceSets.forEach { set ->
-                set.output.classesDirs.forEach { dir ->
-//                    println("Creating dir: ${dir.absolutePath}")
-                    if (!dir.exists()) {
-                        dir.mkdirs()
-                    }
+        if (hasClean.isNotEmpty()) {
+            val task = project.tasks.last { task -> task.name == hasClean.last() }
+
+            task.doLast {
+                createBuildDirs(project)
+            }
+        }
+        else {
+            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM! (but it is)
+            project.afterEvaluate { prj ->
+                createBuildDirs(prj)
+            }
+        }
+    }
+
+    private fun createBuildDirs(prj: Project) {
+        val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
+        sourceSets.forEach { set ->
+            set.output.classesDirs.forEach { dir ->
+//                println("Creating dir: ${dir.absolutePath}")
+                if (!dir.exists()) {
+                    dir.mkdirs()
                 }
             }
         }
     }
+
 
     /**
      * Configure a default resolution strategy. While not necessary, this is used for enforcing sane project builds
