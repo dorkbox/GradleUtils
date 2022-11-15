@@ -53,18 +53,24 @@ class GradleUtils : Plugin<Project> {
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
 
-        project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
-            group = "gradle"
-            outputs.upToDateWhen { false }
-            outputs.cacheIf { false }
-            description = "Automatically update Gradle to the latest version"
-        }
+        // do absolutely NOTHING if we are not the root project.
+        // the gradle wrapper CAN ONLY be applied to the ROOT project (in a multi-project build), otherwise it will FAIL
+        // when trying to apply to the sub-projects.
 
-        project.tasks.create("checkGradleVersion", GradleCheckTask::class.java).apply {
-            group = "gradle"
-            outputs.upToDateWhen { false }
-            outputs.cacheIf { false }
-            description = "Gets both the latest and currently installed Gradle versions"
+        if (project == project.rootProject) {
+            project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
+                group = "gradle"
+                outputs.upToDateWhen { false }
+                outputs.cacheIf { false }
+                description = "Automatically update Gradle to the latest version"
+            }
+
+            project.tasks.create("checkGradleVersion", GradleCheckTask::class.java).apply {
+                group = "gradle"
+                outputs.upToDateWhen { false }
+                outputs.cacheIf { false }
+                description = "Gets both the latest and currently installed Gradle versions"
+            }
         }
 
         project.tasks.create("updateDependencies", GetVersionInfoTask::class.java).apply {

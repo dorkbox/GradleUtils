@@ -50,8 +50,9 @@ GradleUpdateTask : DefaultTask() {
             } else {
                 println("\tDetected new Gradle Version: '$foundGradleVersion', updating from '$current'")
 
-                val wrapper = project.tasks.create("wrapperUpdate", Wrapper::class.java)
-                wrapper.apply {
+                val wrapperUpdate = project.tasks.create("wrapperUpdate", Wrapper::class.java)
+
+                wrapperUpdate.apply {
                     group = "other"
                     outputs.upToDateWhen { false }
                     outputs.cacheIf { false }
@@ -61,7 +62,7 @@ GradleUpdateTask : DefaultTask() {
                     distributionType = Wrapper.DistributionType.ALL
                 }
 
-                wrapper.actions[0].execute(wrapper)
+                wrapperUpdate.actions[0].execute(wrapperUpdate)
             }
         }
     }
