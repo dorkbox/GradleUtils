@@ -381,9 +381,9 @@ open class StaticMethodsAndTools(private val project: Project) {
     fun defaults() {
         addMavenRepositories()
         fixMavenPaths()
-        fixIntellijPaths()
         defaultResolutionStrategy()
         defaultCompileOptions()
+        fixIntellijPaths()
     }
 
     /**
@@ -445,19 +445,18 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
-    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
+    fun fixIntellijPaths(location: String = "z/classes-intellij") {
         // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
-//        println("Setting intellij Compile location to: $location")
+        // println("Setting intellij Compile location to: $location")
         idea(project) {
             // https://youtrack.jetbrains.com/issue/IDEA-175172
             module {
+                // force the module to use OUR output dirs.
+                it.inheritOutputDirs = false
+
                 val mainDir = File(location)
                 it.outputDir = mainDir
                 it.testOutputDir = mainDir
-
-                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
-                it.isDownloadJavadoc = false
-                it.isDownloadSources = true
             }
         }
 
@@ -474,6 +473,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             val task = project.tasks.last { task -> task.name == hasClean.last() }
 
             task.doLast {
+                File(location).deleteRecursively()
                 createBuildDirs(project)
             }
         }
@@ -640,6 +640,17 @@ open class StaticMethodsAndTools(private val project: Project) {
                     kotlinActions(task.kotlinOptions)
                 }
             })
+        }
+
+        // also have to tell intellij (if present) to behave.
+        idea(project) {
+            module {
+                it.jdkName = javaVer
+
+                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                it.isDownloadJavadoc = false
+                it.isDownloadSources = true
+            }
         }
     }
 
