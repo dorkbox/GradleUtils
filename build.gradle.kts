@@ -23,9 +23,9 @@ plugins {
 
     id("com.gradle.plugin-publish") version "0.18.0"
 
-    id("com.dorkbox.Licensing") version "2.10"
-    id("com.dorkbox.VersionUpdate") version "2.4"
-    id("com.dorkbox.GradleUtils") version "2.14"
+    id("com.dorkbox.Licensing") version "2.13"
+    id("com.dorkbox.VersionUpdate") version "2.5"
+    id("com.dorkbox.GradleUtils") version "3.2"
 
     kotlin("jvm") version "1.7.20"
 }
@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.2"
+    const val version = "3.3"
 
     // set as project.ext
     const val name = "Gradle Utils"
