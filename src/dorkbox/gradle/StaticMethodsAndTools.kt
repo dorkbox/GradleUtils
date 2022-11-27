@@ -445,7 +445,7 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      */
-    fun fixIntellijPaths(location: String = "z/classes-intellij") {
+    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
         // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
         // println("Setting intellij Compile location to: $location")
         idea(project) {

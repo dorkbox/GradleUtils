@@ -21,7 +21,7 @@ plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "0.18.0"
+    id("com.gradle.plugin-publish") version "1.1.0"
 
     id("com.dorkbox.Licensing") version "2.13"
     id("com.dorkbox.VersionUpdate") version "2.5"
@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.3"
+    const val version = "3.3.1"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -112,9 +112,12 @@ tasks.jar.get().apply {
 /////////////////////////////////
 gradlePlugin {
     plugins {
-        create("GradleUtils") {
+        create("GradlePublish") {
             id = "${Extras.group}.${Extras.id}"
             implementationClass = "dorkbox.gradle.GradleUtils"
+            displayName = Extras.name
+            description = Extras.description
+            version = Extras.version
         }
     }
 }
@@ -122,14 +125,5 @@ gradlePlugin {
 pluginBundle {
     website = Extras.url
     vcsUrl = Extras.url
-
-    (plugins) {
-        "GradleUtils" {
-            id = "${Extras.group}.${Extras.id}"
-            displayName = Extras.name
-            description = Extras.description
-            tags = listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management")
-            version = Extras.version
-        }
-    }
+    tags = listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management")
 }
