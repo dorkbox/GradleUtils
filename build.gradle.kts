@@ -51,7 +51,7 @@ object Extras {
 GradleUtils.load("$projectDir/../../gradle.properties", Extras)
 GradleUtils.fixIntellijPaths()
 GradleUtils.defaultResolutionStrategy()
-GradleUtils.compileConfiguration(JavaVersion.VERSION_1_8)
+GradleUtils.compileConfiguration(JavaVersion.VERSION_11)
 
 licensing {
     license(License.APACHE_2) {
