@@ -18,6 +18,8 @@ package dorkbox.gradle
 import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
+import dorkbox.os.OS
+import dorkbox.os.OS.osArch
 import org.gradle.api.*
 import org.gradle.api.execution.TaskExecutionGraph
 import org.gradle.api.file.DuplicatesStrategy
@@ -673,19 +675,33 @@ open class StaticMethodsAndTools(private val project: Project) {
         // macos
         // org.eclipse.swt.cocoa.macosx.x86_64
 
-        val currentOS = org.gradle.internal.os.OperatingSystem.current()
-        val swtType = if (System.getProperty("os.arch").matches(".*64.*".toRegex())) {
-            when {
-                currentOS.isWindows -> SwtType.WIN_64
-                currentOS.isMacOsX  -> SwtType.MAC_64
-                else                -> SwtType.LINUX_64
+
+        val swtType = when {
+            OS.isMacOsX -> {
+                when {
+                    OS.is32bit -> SwtType.UNKNOWN
+                    OS.is64bit -> SwtType.MAC_64
+                    OS.isArm -> SwtType.MAC_AARCH64
+                    else -> SwtType.UNKNOWN
+                }
             }
-        } else {
-            when {
-                currentOS.isWindows -> SwtType.WIN_32
-                currentOS.isMacOsX  -> SwtType.MAC_64  // not possible on mac, but here for completeness
-                else                -> SwtType.LINUX_32
+            OS.isWindows -> {
+                when {
+                    OS.is32bit -> SwtType.WIN_32
+                    OS.is64bit -> SwtType.WIN_64
+                    else -> SwtType.UNKNOWN
+                }
             }
+
+            OS.isLinux -> {
+                when {
+                    OS.is32bit -> SwtType.LINUX_32
+                    OS.is64bit -> SwtType.LINUX_64
+                    OS.isArm -> SwtType.LINUX_AARCH64
+                    else -> SwtType.UNKNOWN
+                }
+            }
+            else -> SwtType.UNKNOWN
         }
 
         val fullId = swtType.fullId(version)

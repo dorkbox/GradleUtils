@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.3.1"
+    const val version = "3.4"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -83,6 +83,9 @@ dependencies {
 
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
+
+    // for easier OS identification
+    api("com.dorkbox:OS:1.0")
 
     // for parsing JSON
     implementation("org.json:json:20220924")
