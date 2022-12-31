@@ -17,8 +17,11 @@
 package dorkbox.gradle.jpms
 
 import dorkbox.gradle.StaticMethodsAndTools
-import dorkbox.gradle.kotlin
-import org.gradle.api.*
+import org.gradle.api.Action
+import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
+import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -26,8 +29,6 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
-import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.CategoryFilter.exclude
-import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.CategoryFilter.include
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 
@@ -112,13 +113,9 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 module.sourceDirs = setOf<File>()
             }
 
-            if (module.testSourceDirs == null) {
-                module.testSourceDirs = setOf<File>()
-            }
-
-            if (module.testResourceDirs == null) {
-                module.testResourceDirs = setOf<File>()
-            }
+            // make sure there is something there!
+            module.testSources.from(setOf<File>())
+            module.testResources.from(setOf<File>())
         }
 
 
@@ -140,9 +137,12 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             if (hasKotlin) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main$nameX")
 
-                kotlin.kotlin {
+                kotlin.kotlin.apply {
+                    // I don't like the opinionated sonatype directory structure.
                     setSrcDirs(files)
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
+
+                    exclude("**/module-info.java", "**/EmptyClass.kt") // we have to compile these in a different step!
 
                     // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
                 }
@@ -176,9 +176,12 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             if (hasKotlin) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test$nameX")
 
-                kotlin.kotlin {
+                kotlin.kotlin.apply {
+                    // I don't like the opinionated sonatype directory structure.
                     setSrcDirs(files)
-                    include("**/*.kt") // want to include java files for the source. 'setSrcDirs' resets includes...
+                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
+
+                    exclude("**/module-info.java", "**/EmptyClass.kt") // we have to compile these in a different step!
 
                     // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
                 }
@@ -189,8 +192,8 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
 
             // weird "+=" way of writing this because .addAll didn't work
             StaticMethodsAndTools.idea(project) {
-                module.testSourceDirs = module.testSourceDirs + files.files
-                module.testResourceDirs = module.testResourceDirs + resourceFiles.files
+                module.testSources.from(files.files)
+                module.testResources.from(resourceFiles.files)
             }
 
             compileClasspath += mainX.compileClasspath + test.compileClasspath
