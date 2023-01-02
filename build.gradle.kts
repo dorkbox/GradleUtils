@@ -23,9 +23,9 @@ plugins {
 
     id("com.gradle.plugin-publish") version "1.1.0"
 
-    id("com.dorkbox.Licensing") version "2.13"
+    id("com.dorkbox.Licensing") version "2.17"
     id("com.dorkbox.VersionUpdate") version "2.5"
-    id("com.dorkbox.GradleUtils") version "3.2"
+    id("com.dorkbox.GradleUtils") version "3.4"
 
     kotlin("jvm") version "1.7.20"
 }
@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.4"
+    const val version = "3.5"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -51,7 +51,8 @@ object Extras {
 GradleUtils.load("$projectDir/../../gradle.properties", Extras)
 GradleUtils.fixIntellijPaths()
 GradleUtils.defaultResolutionStrategy()
-GradleUtils.compileConfiguration(JavaVersion.VERSION_11)
+GradleUtils.compileConfiguration(JavaVersion.VERSION_1_8)
+
 
 licensing {
     license(License.APACHE_2) {
@@ -85,7 +86,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // for easier OS identification
-    api("com.dorkbox:OS:1.0")
+    implementation("com.dorkbox:OS:1.1")
 
     // for parsing JSON
     implementation("org.json:json:20220924")

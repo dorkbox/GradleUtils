@@ -1,7 +1,7 @@
  - GradleUtils - Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
    [The Apache Software License, Version 2.0]
    https://git.dorkbox.com/dorkbox/GradleUtils
-   Copyright 2022
+   Copyright 2023
      Dorkbox LLC
 
    Extra license information
@@ -17,8 +17,38 @@
        [The JSON License]
        https://github.com/stleary/JSON-java
        https://www.json.org/json-en.html
-       Copyright 2022
+       Copyright 2023
          JSON.org
+
+     - OS - Information about the system, Java runtime, OS, Window Manager, and Desktop Environment.
+       [The Apache Software License, Version 2.0]
+       https://git.dorkbox.com/dorkbox/OS
+       Copyright 2022
+         Dorkbox LLC
+
+       Extra license information
+         - Kotlin - 
+           [The Apache Software License, Version 2.0]
+           https://github.com/JetBrains/kotlin
+           Copyright 2020
+             JetBrains s.r.o. and Kotlin Programming Language contributors
+           Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
+           See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
+
+         - Updates - Software Update Management
+           [The Apache Software License, Version 2.0]
+           https://git.dorkbox.com/dorkbox/Updates
+           Copyright 2021
+             Dorkbox LLC
+
+           Extra license information
+             - Kotlin - 
+               [The Apache Software License, Version 2.0]
+               https://github.com/JetBrains/kotlin
+               Copyright 2020
+                 JetBrains s.r.o. and Kotlin Programming Language contributors
+               Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
+               See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
 
      - Version - Java Semantic Versioning with exceptions. Minor/Patch number optional and build-after-final-dot (minor/patch) permitted.
        [MIT License]
