@@ -19,14 +19,13 @@ import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import dorkbox.os.OS
-import dorkbox.os.OS.osArch
 import org.gradle.api.*
-import org.gradle.api.execution.TaskExecutionGraph
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.specs.Specs
+import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.util.PatternFilterable
 import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
@@ -604,6 +603,44 @@ open class StaticMethodsAndTools(private val project: Project) {
             override fun execute(task: Task) {
                 task as Jar
                 task.duplicatesStrategy = DuplicatesStrategy.FAIL
+
+                if (hasKotlin) {
+                    val sourceSets = project.extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer
+                    val mainSourceSet: SourceSet = sourceSets.getByName("main")
+
+                    // want to included java + kotlin for the sources
+
+                    // kotlin stuff. Sometimes kotlin depends on java files, so the kotlin sourcesets have BOTH java + kotlin.
+                    // we want to make sure to NOT have both, as it will screw up creating the jar!
+                    try {
+                        val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+
+                        val srcDirs = kotlin.srcDirs
+                        val kotlinFiles = kotlin.asFileTree.matching { it: PatternFilterable ->
+                            // find out if this file (usually, just a java file) is ALSO in the java sourceset.
+                            // this is to prevent DUPLICATES in the jar, because sometimes kotlin must be .kt + .java in order to compile!
+                            val javaFiles = mainSourceSet.java.files.map { file ->
+                                // by definition, it MUST be one of these
+                                val base = srcDirs.first {
+                                    // find out WHICH src dir base path it is
+                                    val path = project.buildDir.relativeTo(it)
+                                    path.path.isNotEmpty()
+                                }
+                                // there can be leading "../" (since it's relative. WE DO NOT WANT THAT!
+                                file.relativeTo(base).path.replace("../", "")
+                            }
+
+                            it.setExcludes(javaFiles)
+                        }
+
+                        task.from(kotlinFiles)
+
+                        // kotlin is always compiled first
+                        task.from(mainSourceSet.java)
+                    } catch (ignored: Exception) {
+                        // maybe we don't have kotlin for the project
+                    }
+                }
 
                 task.doLast(object: Action<Task> {
                     override fun execute(task: Task) {
