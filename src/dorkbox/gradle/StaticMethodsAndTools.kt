@@ -107,6 +107,8 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
     }
 
+    var debug = false
+
     val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
     val isLinux = org.gradle.internal.os.OperatingSystem.current().isLinux
     val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
@@ -119,6 +121,11 @@ open class StaticMethodsAndTools(private val project: Project) {
     init {
         apply(project, "idea")
     }
+
+    fun debug() {
+        this.debug = true
+    }
+
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
@@ -605,12 +612,14 @@ open class StaticMethodsAndTools(private val project: Project) {
                 task.duplicatesStrategy = DuplicatesStrategy.FAIL
 
                 if (hasKotlin) {
-                    val sourceSets = project.extensions.getByName("sourceSets") as org.gradle.api.tasks.SourceSetContainer
+                    if (debug) println("Kotlin sources: ${task.name}")
+
+                    val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
                     val mainSourceSet: SourceSet = sourceSets.getByName("main")
 
                     // want to included java + kotlin for the sources
 
-                    // kotlin stuff. Sometimes kotlin depends on java files, so the kotlin sourcesets have BOTH java + kotlin.
+                    // kotlin stuff. Sometimes kotlin depends on java files, so the kotlin source-sets have BOTH java + kotlin.
                     // we want to make sure to NOT have both, as it will screw up creating the jar!
                     try {
                         val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
@@ -627,15 +636,30 @@ open class StaticMethodsAndTools(private val project: Project) {
                                     path.path.isNotEmpty()
                                 }
                                 // there can be leading "../" (since it's relative. WE DO NOT WANT THAT!
-                                file.relativeTo(base).path.replace("../", "")
+                                val newFile = file.relativeTo(base).path.replace("../", "")
+                                if (debug) println("\t\tAdding: $newFile")
+                                newFile
                             }
 
                             it.setExcludes(javaFiles)
                         }
 
+                        if (debug) {
+                            kotlinFiles.forEach {
+                                println("\t$it")
+                            }
+                        }
                         task.from(kotlinFiles)
 
+
                         // kotlin is always compiled first
+                        if (debug) {
+                            println("Java sources: ${task.name}")
+                            mainSourceSet.java.forEach {
+                                println("\t$it")
+                            }
+                        }
+
                         task.from(mainSourceSet.java)
                     } catch (ignored: Exception) {
                         // maybe we don't have kotlin for the project
