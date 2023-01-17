@@ -20,12 +20,9 @@ import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import dorkbox.os.OS
 import org.gradle.api.*
-import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.specs.Specs
-import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.api.tasks.util.PatternFilterable
 import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
@@ -43,7 +40,7 @@ import kotlin.reflect.full.declaredMemberProperties
 @Suppress("unused", "MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
 open class StaticMethodsAndTools(private val project: Project) {
     companion object {
-        const val defaultKotlinVersion = "1.6.10"
+        const val defaultKotlinVersion = "1.7.0"
 
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
@@ -107,8 +104,6 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
     }
 
-    var debug = false
-
     val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
     val isLinux = org.gradle.internal.os.OperatingSystem.current().isLinux
     val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
@@ -121,11 +116,6 @@ open class StaticMethodsAndTools(private val project: Project) {
     init {
         apply(project, "idea")
     }
-
-    fun debug() {
-        this.debug = true
-    }
-
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
@@ -608,64 +598,6 @@ open class StaticMethodsAndTools(private val project: Project) {
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
         project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Task> {
             override fun execute(task: Task) {
-                task as Jar
-                task.duplicatesStrategy = DuplicatesStrategy.FAIL
-
-                if (hasKotlin) {
-                    if (debug) println("Kotlin sources: ${task.name}")
-
-                    val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-                    val mainSourceSet: SourceSet = sourceSets.getByName("main")
-
-                    // want to included java + kotlin for the sources
-
-                    // kotlin stuff. Sometimes kotlin depends on java files, so the kotlin source-sets have BOTH java + kotlin.
-                    // we want to make sure to NOT have both, as it will screw up creating the jar!
-                    try {
-                        val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
-
-                        val srcDirs = kotlin.srcDirs
-                        val kotlinFiles = kotlin.asFileTree.matching { it: PatternFilterable ->
-                            // find out if this file (usually, just a java file) is ALSO in the java sourceset.
-                            // this is to prevent DUPLICATES in the jar, because sometimes kotlin must be .kt + .java in order to compile!
-                            val javaFiles = mainSourceSet.java.files.map { file ->
-                                // by definition, it MUST be one of these
-                                val base = srcDirs.first {
-                                    // find out WHICH src dir base path it is
-                                    val path = project.buildDir.relativeTo(it)
-                                    path.path.isNotEmpty()
-                                }
-                                // there can be leading "../" (since it's relative. WE DO NOT WANT THAT!
-                                val newFile = file.relativeTo(base).path.replace("../", "")
-                                if (debug) println("\t\tAdding: $newFile")
-                                newFile
-                            }
-
-                            it.setExcludes(javaFiles)
-                        }
-
-                        if (debug) {
-                            kotlinFiles.forEach {
-                                println("\t$it")
-                            }
-                        }
-                        task.from(kotlinFiles)
-
-
-                        // kotlin is always compiled first
-                        if (debug) {
-                            println("Java sources: ${task.name}")
-                            mainSourceSet.java.forEach {
-                                println("\t$it")
-                            }
-                        }
-
-                        task.from(mainSourceSet.java)
-                    } catch (ignored: Exception) {
-                        // maybe we don't have kotlin for the project
-                    }
-                }
-
                 task.doLast(object: Action<Task> {
                     override fun execute(task: Task) {
                         task as Jar
