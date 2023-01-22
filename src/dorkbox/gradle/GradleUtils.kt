@@ -22,9 +22,7 @@ import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
 import java.net.URL
-import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
+import java.util.jar.*
 
 
 /**
@@ -48,6 +46,9 @@ class GradleUtils : Plugin<Project> {
             throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 7.0+ to continue.")
         }
 
+        StaticMethodsAndTools.apply(project, "java")
+        StaticMethodsAndTools.apply(project, "java-library")
+        StaticMethodsAndTools.apply(project, "idea")
 
         println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 

@@ -113,10 +113,6 @@ open class StaticMethodsAndTools(private val project: Project) {
     // this is lazy, because it MUST be run from a task!
     val hasKotlin: Boolean by lazy { hasKotlin(project) }
 
-    init {
-        apply(project, "idea")
-    }
-
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
      * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
