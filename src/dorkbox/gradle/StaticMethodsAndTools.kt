@@ -25,9 +25,6 @@ import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
-import org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions
-import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.security.MessageDigest
 import java.util.*
@@ -40,46 +37,30 @@ import kotlin.reflect.full.declaredMemberProperties
 @Suppress("unused", "MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
 open class StaticMethodsAndTools(private val project: Project) {
     companion object {
-        const val defaultKotlinVersion = "1.7.0"
-
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
          * NOTE: This can ONLY be called from a task, it cannot be called globally!
+         *
+         * additionally, we want to do the `hasKotlin` check AFTER we have assigned kotlin source dirs!
          */
         fun hasKotlin(project: Project, debug: Boolean = false): Boolean {
             try {
                 // check if plugin is available
                 project.plugins.findPlugin("org.jetbrains.kotlin.jvm") ?: return false
 
-                if (debug) println("\tHas kotlin plugin")
+                if (debug) println("\t${project.name} kotlin check:")
+                if (debug) println("\t\tHas kotlin plugin")
 
                 // this will check if the task exists, and throw an exception if it does not or return false
-                project.tasks.named("compileKotlin", KotlinCompile::class.java).orNull ?: return false
+                project.tasks.named("compileKotlin", org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).orNull ?: return false
 
-                if (debug) println("\tHas compile kotlin task")
+                if (debug) println("\t\tHas compile kotlin task")
 
-                // check to see if we have any kotlin file
-                val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-                val main = sourceSets.getByName("main")
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+                project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+                if (debug) println("\t\tHas kotlin source-set")
 
-                if (debug) {
-                    println("\tmain dirs: ${main.java.srcDirs}")
-                    println("\tkotlin dirs: ${kotlin.srcDirs}")
+                return true
 
-                    project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
-                        println("\t\t$it")
-                    }
-                }
-
-                val files = main.java.srcDirs + kotlin.srcDirs
-                files.forEach { srcDir ->
-                    val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
-                    if (kotlinFile?.exists() == true) {
-                        if (debug) println("\t Has kotlin file: $kotlinFile")
-                        return true
-                    }
-                }
             } catch (e: Exception) {
                 if (debug) e.printStackTrace()
             }
@@ -109,9 +90,17 @@ open class StaticMethodsAndTools(private val project: Project) {
     val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
     val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
 
+    @Volatile
+    private var debug = false
+
     private var fixedSWT = false
     // this is lazy, because it MUST be run from a task!
-    val hasKotlin: Boolean by lazy { hasKotlin(project) }
+    val hasKotlin: Boolean by lazy { hasKotlin(project, debug) }
+
+    fun debug() {
+        println("\tEnabling debug.")
+        debug = true
+    }
 
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
@@ -369,6 +358,39 @@ open class StaticMethodsAndTools(private val project: Project) {
         return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
     }
 
+    fun printSourceDirs() {
+        // check to see if we have any kotlin file
+        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+        val main = sourceSets.getByName("main").java
+        val test = sourceSets.getByName("test").java
+
+        println("\tmain dirs: ${main.srcDirs}")
+        println("\ttest dirs: ${test.srcDirs}")
+
+        if (hasKotlin) {
+            val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets
+            val kMain = kotlin.getByName("main").kotlin
+            val kTest = kotlin.getByName("test").kotlin
+
+            println("\tkotlin main dirs: ${kMain.srcDirs}")
+            println("\tkotlin test dirs: ${kTest.srcDirs}")
+        }
+
+//        println("\tParsed files:")
+//        project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
+//            println("\t\t$it")
+//        }
+
+//        val files = main.srcDirs + test.srcDirs + kMain.srcDirs + kTest.srcDirs
+//        files.forEach { srcDir ->
+//            val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
+//            if (kotlinFile?.exists() == true) {
+//                if (debug) println("\t Has kotlin file: $kotlinFile")
+//                return true
+//            }
+//        }
+    }
+
     /**
      * set gradle project defaults, as used by dorkbox, llc
      */
@@ -407,12 +429,13 @@ open class StaticMethodsAndTools(private val project: Project) {
                 include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
             }
 
-            if (hasKotlin) {
+            try {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("src"))
                     include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
                 }
+            } catch (ignored: Exception) {
             }
 
             resources.setSrcDirs(project.files("resources"))
@@ -424,12 +447,13 @@ open class StaticMethodsAndTools(private val project: Project) {
                 include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
             }
 
-            if (hasKotlin) {
+            try {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("test"))
                     include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
                 }
+            } catch (ignored: Exception) {
             }
 
             resources.setSrcDirs(project.files("testResources"))
@@ -520,10 +544,8 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
      */
     fun defaultCompileOptions() {
-        project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
-            override fun execute(task: Task) {
-                task as JavaCompile
-
+        project.tasks.withType(JavaCompile::class.java, object: Action<JavaCompile> {
+            override fun execute(task: JavaCompile) {
                 task.options.encoding = "UTF-8"
                 task.options.isIncremental = true
                 task.options.compilerArgs.add("-Xpkginfo:always")
@@ -534,9 +556,17 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Basic, default compile configurations
      */
+    fun compileConfiguration(javaVersion: JavaVersion) {
+
+    }
+
+
+    /**
+     * Basic, default compile configurations
+     */
     fun compileConfiguration(javaVersion: JavaVersion,
                              kotlinJavaVersion: JavaVersion = javaVersion,
-                             kotlinActions: KotlinJvmOptions.() -> Unit = {}) {
+                             kotlinActions: org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
         val kotlinJavaVer = kotlinJavaVersion.toString().also {
             if (it.startsWith("1.")) {
@@ -550,27 +580,11 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
         }
 
-        val kotlinVer: String = try {
-            if (hasKotlin) {
-                val version = project.getKotlinPluginVersion()
-
-                // we ONLY care about the major.minor
-                val secondDot = version.indexOf('.', version.indexOf('.')+1)
-                version.substring(0, secondDot)
-            } else {
-                defaultKotlinVersion
-            }
-        } catch (e: Exception) {
-            // in case we cannot parse it from the plugin, provide a reasonable default (the latest stable)
-            defaultKotlinVersion
-        }
-
+        val kotlinVer = KotlinUtil.getKotlinVersion(project)
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-        project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
-            override fun execute(task: Task) {
-                task as JavaCompile
-
+        project.tasks.withType(JavaCompile::class.java, object: Action<JavaCompile> {
+            override fun execute(task: JavaCompile) {
                 task.doFirst(object: Action<Task> {
                     override fun execute(it: Task) {
                         it as JavaCompile
@@ -592,8 +606,8 @@ open class StaticMethodsAndTools(private val project: Project) {
         })
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-        project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Task> {
-            override fun execute(task: Task) {
+        project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Jar> {
+            override fun execute(task: Jar) {
                 task.doLast(object: Action<Task> {
                     override fun execute(task: Task) {
                         task as Jar
@@ -607,15 +621,13 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
         })
 
-        if (hasKotlin) {
+        try {
             // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-            project.tasks.withType(KotlinCompile::class.java, object: Action<Task> {
-                override fun execute(task: Task) {
-                    task as KotlinCompile
-
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java, object: Action<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+                override fun execute(task: org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
                     task.doFirst(object: Action<Task> {
                         override fun execute(it: Task) {
-                            it as KotlinCompile
+                            it as org.jetbrains.kotlin.gradle.tasks.KotlinCompile
                             println("\tCompiling classes to Kotlin ${it.kotlinOptions.languageVersion}, Java ${it.kotlinOptions.jvmTarget}")
                         }
                     })
@@ -631,6 +643,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                     kotlinActions(task.kotlinOptions)
                 }
             })
+        } catch (ignored: Exception) {
         }
 
         // also have to tell intellij (if present) to behave.
@@ -751,14 +764,13 @@ open class StaticMethodsAndTools(private val project: Project) {
      * 2) The kotlin modules must be associated
      */
     fun allowKotlinInternalAccessForTests(moduleName: String, vararg accessGroup: AccessGroup) {
-        if (hasKotlin) {
-            // Make sure to cleanup the any possible license file on clean
+        try {
+            // Make sure to cleanup any possible license file on clean
             println("\tAllowing kotlin internal access for $moduleName")
 
             // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-            project.tasks.withType(KotlinCompile::class.java, object: Action<Task> {
-                override fun execute(task: Task) {
-                    task as KotlinCompile
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java, object: Action<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+                override fun execute(task: org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
                     task.kotlinOptions.moduleName = moduleName
                 }
@@ -774,6 +786,7 @@ open class StaticMethodsAndTools(private val project: Project) {
                     }
                 }
             }
+        } catch (ignored: Exception) {
         }
     }
 
