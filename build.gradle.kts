@@ -23,9 +23,9 @@ plugins {
 
     id("com.gradle.plugin-publish") version "1.1.0"
 
-    id("com.dorkbox.Licensing") version "2.17"
-    id("com.dorkbox.VersionUpdate") version "2.5"
-    id("com.dorkbox.GradleUtils") version "3.4"
+    id("com.dorkbox.Licensing") version "2.20"
+    id("com.dorkbox.VersionUpdate") version "2.6"
+    id("com.dorkbox.GradleUtils") version "3.10"
 
     kotlin("jvm") version "1.7.20"
 }
@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.9"
+    const val version = "3.10"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -49,8 +49,7 @@ object Extras {
 /////  assign 'Extras'
 ///////////////////////////////
 GradleUtils.load("$projectDir/../../gradle.properties", Extras)
-GradleUtils.fixIntellijPaths()
-GradleUtils.defaultResolutionStrategy()
+GradleUtils.defaults()
 GradleUtils.compileConfiguration(JavaVersion.VERSION_1_8)
 
 
@@ -62,20 +61,7 @@ licensing {
     }
 }
 
-sourceSets {
-    main {
-        java {
-            setSrcDirs(listOf("src"))
-
-            // want to include kotlin files for the source. 'setSrcDirs' resets includes...
-            include("**/*.kt")
-        }
-    }
-}
-
 repositories {
-    mavenLocal()
-    mavenCentral()
     gradlePluginPortal()
 }
 
@@ -86,13 +72,13 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // for easier OS identification
-    implementation("com.dorkbox:OS:1.1")
+    implementation("com.dorkbox:OS:1.6")
 
     // for parsing JSON
     implementation("org.json:json:20220924")
 
     // for parsing version information from maven
-    implementation("com.dorkbox:Version:2.4")
+    implementation("com.dorkbox:Version:3.0")
 }
 
 tasks.jar.get().apply {

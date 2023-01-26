@@ -16,16 +16,15 @@
 
 package dorkbox.gradle.deps
 
-import com.dorkbox.version.Version
 import dorkbox.gradle.StaticMethodsAndTools
+import dorkbox.version.Version
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskAction
 import java.io.InputStreamReader
 import java.net.URL
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.*
+import java.util.concurrent.locks.*
 import kotlin.concurrent.write
 
 open class
@@ -34,13 +33,14 @@ GetVersionInfoTask : DefaultTask() {
         var dirtyVersions = false
 
         fun updateReleaseVersion(version: String) {
-            if (release == null) {
+            val curRelease = release
+            if (curRelease == null) {
                 release = version
             } else {
                 // there can be errors when parsing version info, since not all version strings follow semantic versioning
                 try {
-                    val currentVersion = Version.from(release)
-                    val releaseVer = Version.from(version)
+                    val currentVersion = Version(curRelease)
+                    val releaseVer = Version(version)
 
                     if (releaseVer.greaterThan(currentVersion)) {
                         release = version
@@ -67,11 +67,11 @@ GetVersionInfoTask : DefaultTask() {
             try {
                 // this creates a LOT of version objects. Probably better to store these in a list, however we want all backing data
                 // structures to be strings.
-                val curVersion = Version.from(currentVersion)
+                val curVersion = Version(currentVersion)
                 return versions.sortedWith { o1, o2 ->
-                    Version.from(o1).compareTo(Version.from(o2))
+                    Version(o1).compareTo(Version(o2))
                 }.filter {
-                    Version.from(it).greaterThan(curVersion)
+                    Version(it).greaterThan(curVersion)
                 }.toList()
             } catch (e: Exception) {
                 // WHOOPS! There was an invalid version number! Instead of just crashing, try a different way...
