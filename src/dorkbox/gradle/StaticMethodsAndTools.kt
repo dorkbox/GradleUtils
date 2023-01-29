@@ -24,6 +24,7 @@ import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
+import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
 import org.gradle.util.GradleVersion
 import java.io.File
 import java.security.MessageDigest
@@ -94,12 +95,39 @@ open class StaticMethodsAndTools(private val project: Project) {
     private var debug = false
 
     private var fixedSWT = false
-    // this is lazy, because it MUST be run from a task!
+
+    // this is lazy, because it MUST be initialized from a task!
     val hasKotlin: Boolean by lazy { hasKotlin(project, debug) }
 
+    /**
+     * Shows info if kotlin is enabled, shows exact information as to what the source-set directories are for java and kotlin
+     */
     fun debug() {
-        println("\tEnabling debug.")
+        println("\tEnabling debug")
         debug = true
+
+        project.afterEvaluate {
+            val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
+            val main = sourceSets.getByName("main").java
+            val test = sourceSets.getByName("test").java
+
+            println("\tSource directories:")
+
+            println("\t\tJava:")
+            println("\t\t\tmain: ${main.srcDirs}")
+            println("\t\t\ttest: ${test.srcDirs}")
+
+            try {
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets
+                val kMain = kotlin.getByName("main").kotlin
+                val kTest = kotlin.getByName("test").kotlin
+
+                println("\t\tKotlin:")
+                println("\t\t\tmain: ${kMain.srcDirs}")
+                println("\t\t\ttest: ${kTest.srcDirs}")
+            } catch (e: Exception) {
+            }
+        }
     }
 
     /**
@@ -358,39 +386,6 @@ open class StaticMethodsAndTools(private val project: Project) {
         return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
     }
 
-    fun printSourceDirs() {
-        // check to see if we have any kotlin file
-        val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
-        val main = sourceSets.getByName("main").java
-        val test = sourceSets.getByName("test").java
-
-        println("\tmain dirs: ${main.srcDirs}")
-        println("\ttest dirs: ${test.srcDirs}")
-
-        if (hasKotlin) {
-            val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets
-            val kMain = kotlin.getByName("main").kotlin
-            val kTest = kotlin.getByName("test").kotlin
-
-            println("\tkotlin main dirs: ${kMain.srcDirs}")
-            println("\tkotlin test dirs: ${kTest.srcDirs}")
-        }
-
-//        println("\tParsed files:")
-//        project.buildFile.parentFile.walkTopDown().filter { it.extension == "kt" }.forEach {
-//            println("\t\t$it")
-//        }
-
-//        val files = main.srcDirs + test.srcDirs + kMain.srcDirs + kTest.srcDirs
-//        files.forEach { srcDir ->
-//            val kotlinFile = srcDir.walkTopDown().find { it.extension == "kt" }
-//            if (kotlinFile?.exists() == true) {
-//                if (debug) println("\t Has kotlin file: $kotlinFile")
-//                return true
-//            }
-//        }
-    }
-
     /**
      * set gradle project defaults, as used by dorkbox, llc
      */
@@ -475,6 +470,10 @@ open class StaticMethodsAndTools(private val project: Project) {
                 val mainDir = File(location)
                 it.outputDir = mainDir
                 it.testOutputDir = mainDir
+
+                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                it.isDownloadJavadoc = false
+                it.isDownloadSources = true
             }
         }
 
@@ -541,13 +540,19 @@ open class StaticMethodsAndTools(private val project: Project) {
     }
 
     /**
-     * Always compile java with UTF-8, make it incremental, and compile `package-info.java` classes
+     * Always compile java with UTF-8, make it incremental, add -Xlint:unchecked, add -Xlint:deprecation, and compile `package-info.java` classes
      */
     fun defaultCompileOptions() {
         project.tasks.withType(JavaCompile::class.java, object: Action<JavaCompile> {
             override fun execute(task: JavaCompile) {
                 task.options.encoding = "UTF-8"
                 task.options.isIncremental = true
+
+                // -Xlint:deprecation
+                task.options.isDeprecation = true
+
+                // -Xlint:unchecked
+                task.options.compilerArgs.add("-Xlint:unchecked")
                 task.options.compilerArgs.add("-Xpkginfo:always")
             }
         })
@@ -557,48 +562,18 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Basic, default compile configurations
      */
     fun compileConfiguration(javaVersion: JavaVersion) {
-
-    }
-
-
-    /**
-     * Basic, default compile configurations
-     */
-    fun compileConfiguration(javaVersion: JavaVersion,
-                             kotlinJavaVersion: JavaVersion = javaVersion,
-                             kotlinActions: org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions.() -> Unit = {}) {
         val javaVer = javaVersion.toString()
-        val kotlinJavaVer = kotlinJavaVersion.toString().also {
-            if (it.startsWith("1.")) {
-                if (it == "1.6" || it == "1.8") {
-                    it
-                } else {
-                    it.substring(2)
-                }
-            } else {
-                it
-            }
-        }
-
-        val kotlinVer = KotlinUtil.getKotlinVersion(project)
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-        project.tasks.withType(JavaCompile::class.java, object: Action<JavaCompile> {
-            override fun execute(task: JavaCompile) {
+        project.tasks.withType(JavaCompile::class.java, object: Action<Task> {
+            override fun execute(task: Task) {
+                task as JavaCompile
                 task.doFirst(object: Action<Task> {
                     override fun execute(it: Task) {
                         it as JavaCompile
                         println("\tCompiling classes to Java ${JavaVersion.toVersion(it.targetCompatibility)}")
                     }
                 })
-
-                task.options.encoding = "UTF-8"
-
-                // -Xlint:deprecation
-                task.options.isDeprecation = true
-
-                // -Xlint:unchecked
-                task.options.compilerArgs.add("-Xlint:unchecked")
 
                 task.sourceCompatibility = javaVer
                 task.targetCompatibility = javaVer
@@ -620,6 +595,46 @@ open class StaticMethodsAndTools(private val project: Project) {
                 })
             }
         })
+
+        try {
+            // also have to tell intellij (if present) to behave.
+            idea(project) {
+                module {
+                    it.jdkName = javaVer
+                    it.targetBytecodeVersion = javaVersion
+                    it.languageLevel = IdeaLanguageLevel(javaVersion)
+
+                    // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                    it.isDownloadJavadoc = false
+                    it.isDownloadSources = true
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+    }
+
+
+    /**
+     * Basic, default compile configurations
+     */
+    fun compileConfiguration(javaVersion: JavaVersion,
+                             kotlinJavaVersion: JavaVersion = javaVersion,
+                             kotlinActions: org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions.() -> Unit = {}) {
+        val kotlinJavaVer = kotlinJavaVersion.toString().also {
+            if (it.startsWith("1.")) {
+                if (it == "1.6" || it == "1.8") {
+                    it
+                } else {
+                    it.substring(2)
+                }
+            } else {
+                it
+            }
+        }
+
+        val kotlinVer = KotlinUtil.getKotlinVersion(project)
+
+        compileConfiguration(javaVersion)
 
         try {
             // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
@@ -644,17 +659,6 @@ open class StaticMethodsAndTools(private val project: Project) {
                 }
             })
         } catch (ignored: Exception) {
-        }
-
-        // also have to tell intellij (if present) to behave.
-        idea(project) {
-            module {
-                it.jdkName = javaVer
-
-                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
-                it.isDownloadJavadoc = false
-                it.isDownloadSources = true
-            }
         }
     }
 
