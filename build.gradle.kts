@@ -34,7 +34,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.10"
+    const val version = "3.11"
 
     // set as project.ext
     const val name = "Gradle Utils"
