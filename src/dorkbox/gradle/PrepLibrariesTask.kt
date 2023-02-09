@@ -21,7 +21,7 @@ import org.gradle.api.Project
 import org.gradle.api.file.CopySpec
 import org.gradle.api.tasks.TaskAction
 import java.io.File
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.*
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
@@ -206,7 +206,7 @@ PrepLibrariesTask : DefaultTask() {
                     val cacheFileName = projLibraries[file]
                     if (cacheFileName == null) {
                         println("\tUnable to find: $file")
-                        println("\\tExisting: ${projLibraries.map { it.key }.joinToString()}")
+                        println("\t\tExisting: ${projLibraries.map { it.key }.joinToString()}")
                     } else {
                         libraries[cacheFileName] = file
                     }
