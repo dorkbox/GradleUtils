@@ -31,7 +31,8 @@ PrepLibrariesTask : DefaultTask() {
     companion object {
         private val lock = ReentrantReadWriteLock()
         private val allLibraries = mutableMapOf<String, MutableMap<File, String>>()
-        private val allProjectLibraries = mutableMapOf<File, String>()
+        private val allCompileProjectLibraries = mutableMapOf<File, String>()
+        private val allRuntimeProjectLibraries = mutableMapOf<File, String>()
 
         fun projectLibs(project: Project): MutableMap<File, String> {
             lock.read {
@@ -48,10 +49,10 @@ PrepLibrariesTask : DefaultTask() {
             }
         }
 
-        fun collectLibraries(projects: Array<out Project>): Map<File, String> {
+        fun collectCompileLibraries(projects: Array<out Project>): Map<File, String> {
             lock.read {
-                if (allProjectLibraries.isNotEmpty()) {
-                    return allProjectLibraries
+                if (allCompileProjectLibraries.isNotEmpty()) {
+                    return allCompileProjectLibraries
                 }
             }
             println("\tCollecting all libraries for: ${projects.joinToString(",") { it.name }}")
@@ -61,14 +62,34 @@ PrepLibrariesTask : DefaultTask() {
 
                 projects.forEach { project ->
                     val tools = StaticMethodsAndTools(project)
-                    collectLibs(tools, project, allProjectLibraries, librariesByFileName)
+                    collectLibs(tools, project, allCompileProjectLibraries, librariesByFileName)
                 }
 
-                return allProjectLibraries
+                return allCompileProjectLibraries
             }
         }
 
-        fun copyLibrariesTo(projects: Array<out Project>): Action<CopySpec> {
+        fun collectRuntimeLibraries(projects: Array<out Project>): Map<File, String> {
+            lock.read {
+                if (allRuntimeProjectLibraries.isNotEmpty()) {
+                    return allRuntimeProjectLibraries
+                }
+            }
+            println("\tCollecting all libraries for: ${projects.joinToString(",") { it.name }}")
+
+            lock.write {
+                val librariesByFileName = mutableMapOf<String, File>()
+
+                projects.forEach { project ->
+                    val tools = StaticMethodsAndTools(project)
+                    collectLibs(tools, project, allRuntimeProjectLibraries, librariesByFileName)
+                }
+
+                return allRuntimeProjectLibraries
+            }
+        }
+
+        fun copyCompileLibrariesTo(projects: Array<out Project>): Action<CopySpec> {
             @Suppress("ObjectLiteralToLambda")
             val action = object: Action<CopySpec> {
                 override fun execute(copySpec: CopySpec) {
@@ -78,8 +99,36 @@ PrepLibrariesTask : DefaultTask() {
                         return
                     }
 
-                    val projLibraries = collectLibraries(projects)
-                    println("\tCopying libraries for ${projects.joinToString(",") { it.name }}")
+                    val projLibraries = collectCompileLibraries(projects)
+                    println("\tCopying compile libraries for ${projects.joinToString(",") { it.name }}")
+
+                    synchronized(projLibraries) {
+                        projLibraries.forEach { (file, fileName) ->
+                            copySpec.from(file) {
+                                it.rename {
+                                    fileName
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return action
+        }
+
+        fun copyRuntimeLibrariesTo(projects: Array<out Project>): Action<CopySpec> {
+            @Suppress("ObjectLiteralToLambda")
+            val action = object: Action<CopySpec> {
+                override fun execute(copySpec: CopySpec) {
+                    // if there is a clean, we DO NOT run!
+                    // no need to check all projects, because this checks the parent gradle tasks
+                    if (!shouldRun(projects.first())) {
+                        return
+                    }
+
+                    val projLibraries = collectRuntimeLibraries(projects)
+                    println("\tCopying runtime libraries for ${projects.joinToString(",") { it.name }}")
 
                     synchronized(projLibraries) {
                         projLibraries.forEach { (file, fileName) ->
@@ -102,7 +151,7 @@ PrepLibrariesTask : DefaultTask() {
             librariesByFile: MutableMap<File, String>,
             librariesByFileName: MutableMap<String, File>
         ) {
-            val resolveAllDependencies = tools.resolveAllDependencies(project).flatMap { it.artifacts }
+            val resolveAllDependencies = tools.resolveRuntimeDependencies(project).dependencies.flatMap { it.artifacts }
 
             resolveAllDependencies.forEach { artifact ->
                 val file = artifact.file

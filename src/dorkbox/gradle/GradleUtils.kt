@@ -98,8 +98,12 @@ fun org.gradle.api.Project.getDependenciesAsClasspath(): String {
     return this.prepLibraries().getAsClasspath()
 }
 
-fun org.gradle.api.Project.getAllLibraries(): Map<File, String> {
-    return PrepLibrariesTask.collectLibraries(this.rootProject.allprojects.toTypedArray())
+fun org.gradle.api.Project.getCompileLibraries(): Map<File, String> {
+    return PrepLibrariesTask.collectCompileLibraries(this.rootProject.allprojects.toTypedArray())
+}
+
+fun org.gradle.api.Project.getRuntimeLibraries(): Map<File, String> {
+    return PrepLibrariesTask.collectRuntimeLibraries(this.rootProject.allprojects.toTypedArray())
 }
 
 fun org.gradle.api.Project.copyLibrariesTo(location: File) {
