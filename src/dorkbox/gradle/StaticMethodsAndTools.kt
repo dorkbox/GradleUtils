@@ -457,56 +457,71 @@ open class StaticMethodsAndTools(private val project: Project) {
 
     /**
      * Fix the compiled output from intellij to be SEPARATE from gradle.
+     *
+     * NOTE: This only affects NEW projects inported into intellji from gradle!
      */
     fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
-        // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
-        // println("Setting intellij Compile location to: $location")
-        idea(project) {
-            // https://youtrack.jetbrains.com/issue/IDEA-175172
-            module {
-                // force the module to use OUR output dirs.
-                it.inheritOutputDirs = false
+        val intellijDir = File(location)
 
-                val mainDir = File(location)
-                it.outputDir = mainDir
-                it.testOutputDir = mainDir
+        try {
+            // put idea in its place! Not having this causes SO MANY PROBLEMS when building modules
+            // println("Setting intellij Compile location to: $location")
+            idea(project) {
+                // https://youtrack.jetbrains.com/issue/IDEA-175172
+                module {
+                    // force the module to use OUR output dirs.
+                    it.inheritOutputDirs = false
 
-                // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
-                it.isDownloadJavadoc = false
-                it.isDownloadSources = true
+                    it.outputDir = intellijDir
+                    it.testOutputDir = intellijDir
+
+                    // by default, we ALWAYS want sources. If you have sources, you don't need javadoc (since the sources have them in it already)
+                    it.isDownloadJavadoc = false
+                    it.isDownloadSources = true
+                }
             }
-        }
 
-        // this has the side-effect of NOT creating the gradle directories....
-        // also... if we CLEAN the project, the STANDARD build dir is DELETED. This messes up mixed kotlin + java projects, because the
-        // INTELLIJ compiler will compile the GRADLE classes (not the intellij classes) to the WRONG location!
-        //   This appears to be triggered by a file watcher on the build dir.
-        //   A subsequent problem created by this, is when we go to compile an archive (jar/etc) NORMALLY (via gradle)... there will be duplicates!
-        val hasClean = project.gradle.startParameter.taskNames.filter { taskName ->
-            taskName.lowercase(Locale.getDefault()).contains("clean")
-        }
-
-        if (hasClean.isNotEmpty()) {
-            val task = project.tasks.last { task -> task.name == hasClean.last() }
-
-            task.doLast {
-                File(location).deleteRecursively()
-                createBuildDirs(project)
+            // this has the side-effect of NOT creating the gradle directories....
+            // also... if we CLEAN the project, the STANDARD build dir is DELETED. This messes up mixed kotlin + java projects, because the
+            // INTELLIJ compiler will compile the GRADLE classes (not the intellij classes) to the WRONG location!
+            //   This appears to be triggered by a file watcher on the build dir.
+            //   A subsequent problem created by this, is when we go to compile an archive (jar/etc) NORMALLY (via gradle)... there will be duplicates!
+            val hasClean = project.gradle.startParameter.taskNames.filter { taskName ->
+                taskName.lowercase(Locale.getDefault()).contains("clean")
             }
-        }
-        else {
-            // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM! (but it is)
-            project.afterEvaluate { prj ->
-                createBuildDirs(prj)
+
+            if (hasClean.isNotEmpty()) {
+                val task = project.tasks.last { task -> task.name == hasClean.last() }
+
+                task.doLast {
+                    intellijDir.deleteRecursively()
+                    createBuildDirs(project, intellijDir)
+                }
+            } else {
+                // make sure that the source set directories all exist. THIS SHOULD NOT BE A PROBLEM! (but it is)
+                project.afterEvaluate { prj ->
+                    createBuildDirs(prj, intellijDir)
+                }
             }
+        } catch (ignored: Exception) {
+            // likely that intellij is not used, so ignore errors from it
         }
     }
 
-    private fun createBuildDirs(prj: Project) {
+    private fun createBuildDirs(prj: Project, intellijDir: File) {
         val sourceSets = prj.extensions.getByName("sourceSets") as SourceSetContainer
         sourceSets.forEach { set ->
             set.output.classesDirs.forEach { dir ->
-//                println("Creating dir: ${dir.absolutePath}")
+                // println("Dir: ${dir.absolutePath}")
+
+                // ../classes/java/main -> java/main
+                val classDir = dir.toRelativeString(intellijDir).substring(3).let { it.substring(it.indexOf('/') + 1) }
+                val classDirRelative = File(intellijDir, classDir)
+
+                if (!classDirRelative.exists()) {
+                    classDirRelative.mkdirs()
+                }
+
                 if (!dir.exists()) {
                     dir.mkdirs()
                 }
