@@ -20,6 +20,7 @@ import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import dorkbox.os.OS
 import org.gradle.api.*
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
@@ -598,6 +599,8 @@ open class StaticMethodsAndTools(private val project: Project) {
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
         project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Jar> {
             override fun execute(task: Jar) {
+                task.duplicatesStrategy = DuplicatesStrategy.FAIL
+
                 task.doLast(object: Action<Task> {
                     override fun execute(task: Task) {
                         task as Jar
