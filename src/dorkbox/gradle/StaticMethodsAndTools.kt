@@ -19,7 +19,12 @@ import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JavaXConfiguration
 import dorkbox.gradle.jpms.SourceSetContainer2
 import dorkbox.os.OS
-import org.gradle.api.*
+import org.gradle.api.Action
+import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
@@ -577,7 +582,7 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Basic, default compile configurations
      */
-    fun compileConfiguration(javaVersion: JavaVersion) {
+    private fun compileConfiguration(javaVersion: JavaVersion) {
         val javaVer = javaVersion.toString()
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
