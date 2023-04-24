@@ -18,6 +18,7 @@ package dorkbox.gradle
 import dorkbox.gradle.deps.GetVersionInfoTask
 import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
+import org.gradle.jvm.tasks.Jar
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
@@ -180,4 +181,28 @@ fun JarFile.addFilesToJar(filesToAdd: List<Pair<File, String>>) {
             byteArrayOutputStream.writeTo(outputStream)
         }
     }
+}
+
+
+/**
+ * Make sure that the creation of manifests happens AFTER task configuration, but before task execution.
+ *
+ * There are dependency issues if the manifest is configured during task configuration.
+ *
+ * These are NOT lambda's because of issues with gradle.
+ */
+fun  org.gradle.jvm.tasks.Jar.safeManifest(action: Action<in org.gradle.api.java.archives.Manifest>) {
+    val task = this
+
+    task.doFirst(object: Action<Task> {
+        override fun execute(task: Task) {
+            task as Jar
+
+            task.manifest(object : Action<org.gradle.api.java.archives.Manifest> {
+                override fun execute(t: org.gradle.api.java.archives.Manifest) {
+                    action.execute(t)
+                }
+            })
+        }
+    })
 }
