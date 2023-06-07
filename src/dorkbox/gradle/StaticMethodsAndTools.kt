@@ -34,6 +34,7 @@ import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
 import org.gradle.util.GradleVersion
 import java.io.File
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
@@ -104,6 +105,11 @@ open class StaticMethodsAndTools(private val project: Project) {
 
     // this is lazy, because it MUST be initialized from a task!
     val hasKotlin: Boolean by lazy { hasKotlin(project, debug) }
+
+    /**
+     * Get the time now as a string. This is to reduce the import requirements in a gradle build file
+     */
+    fun now() = Instant.now().toString()
 
     /**
      * Shows info if kotlin is enabled, shows exact information as to what the source-set directories are for java and kotlin
