@@ -23,7 +23,7 @@ plugins {
 
     id("com.gradle.plugin-publish") version "1.1.0"
 
-    id("com.dorkbox.Licensing") version "2.20"
+    id("com.dorkbox.Licensing") version "2.24"
     id("com.dorkbox.VersionUpdate") version "2.6"
     id("com.dorkbox.GradleUtils") version "3.10"
 
@@ -86,11 +86,11 @@ dependencies {
     // for easier OS identification
     implementation("com.dorkbox:OS:1.6")
 
-    // for parsing JSON
-    implementation("org.json:json:20220924")
+    // for parsing JSON when updating gradle
+    implementation("org.json:json:20230227")
 
     // for parsing version information from maven
-    implementation("com.dorkbox:Version:3.0")
+    implementation("com.dorkbox:Version:3.1")
 }
 
 tasks.jar.get().apply {
