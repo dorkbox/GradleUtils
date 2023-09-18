@@ -16,15 +16,11 @@
 package dorkbox.gradle
 
 import dorkbox.gradle.deps.DependencyScanner
-import dorkbox.gradle.jpms.JavaXConfiguration
-import dorkbox.gradle.jpms.SourceSetContainer2
+import dorkbox.gradle.jpms.JpmsMultiRelease
+import dorkbox.gradle.jpms.JpmsOnly
+import dorkbox.gradle.jpms.JpmsSourceSetContainer
 import dorkbox.os.OS
-import org.gradle.api.Action
-import org.gradle.api.GradleException
-import org.gradle.api.JavaVersion
-import org.gradle.api.Plugin
-import org.gradle.api.Project
-import org.gradle.api.Task
+import org.gradle.api.*
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
@@ -115,7 +111,6 @@ open class StaticMethodsAndTools(private val project: Project) {
      * Shows info if kotlin is enabled, shows exact information as to what the source-set directories are for java and kotlin
      */
     fun debug() {
-        println("\tEnabling debug")
         debug = true
 
         project.afterEvaluate {
@@ -687,6 +682,9 @@ open class StaticMethodsAndTools(private val project: Project) {
                     kotlinActions(task.kotlinOptions)
                 }
             })
+
+            // now we auto-check if it's necessary to enable JPMS support for PRIMARY locations (ie, not the src9 location)
+            JpmsOnly.runIfNecessary(javaVersion, project, this)
         } catch (ignored: Exception) {
         }
     }
@@ -762,16 +760,16 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Load JPMS for a specific java version using the default configuration
      */
-    fun jpms(javaVersion: JavaVersion): JavaXConfiguration {
-        return JavaXConfiguration(javaVersion, project, this)
+    fun jpms(javaVersion: JavaVersion): JpmsMultiRelease {
+        return JpmsMultiRelease(javaVersion, project, this)
     }
 
     /**
      * Load and configure JPMS for a specific java version
      */
-    fun jpms(javaVersion: JavaVersion, block: SourceSetContainer2.() -> Unit): JavaXConfiguration {
-        val javaX = JavaXConfiguration(javaVersion, project, this)
-        block(SourceSetContainer2(javaX))
+    fun jpms(javaVersion: JavaVersion, block: JpmsSourceSetContainer.() -> Unit): JpmsMultiRelease {
+        val javaX = JpmsMultiRelease(javaVersion, project, this)
+        block(JpmsSourceSetContainer(javaX))
         return javaX
     }
 

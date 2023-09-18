@@ -18,7 +18,7 @@ package dorkbox.gradle.jpms
 
 import org.gradle.api.tasks.SourceSet
 
-class SourceSetContainer2(private val javaX: JavaXConfiguration) {
+class JpmsSourceSetContainer(private val javaX: JpmsMultiRelease) {
     fun main(block: SourceSet.() -> Unit) {
         block(javaX.mainX)
     }

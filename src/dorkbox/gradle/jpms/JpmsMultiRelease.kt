@@ -17,11 +17,7 @@
 package dorkbox.gradle.jpms
 
 import dorkbox.gradle.StaticMethodsAndTools
-import org.gradle.api.Action
-import org.gradle.api.GradleException
-import org.gradle.api.JavaVersion
-import org.gradle.api.Project
-import org.gradle.api.Task
+import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -42,13 +38,10 @@ import java.io.File
 //target/classes-java9 .
 
 @Suppress("MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
-class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project, gradleUtils: StaticMethodsAndTools) {
+class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, gradleUtils: StaticMethodsAndTools) {
     val ver: String = javaVersion.majorVersion
 
-    // this cannot be ONLY a number, there must be something else -- intellij will *not* pickup the name if it's only a number
-    val nameX = "_$ver"
-
-    // If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
+    // If the kotlin plugin is applied, and there is a compileKotlin task. Then kotlin is enabled
     val hasKotlin = gradleUtils.hasKotlin
 
     val moduleFile = project.projectDir.walkTopDown().find { it.name == "module-info.java" }
@@ -65,17 +58,19 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
     lateinit var compileMainKotlin: KotlinCompile
     lateinit var compileTestKotlin: KotlinCompile
 
-
+    val lower = "jpms"
+    val upper = "Jpms"
 
     // plugin provided
-    val mainX: SourceSet = sourceSets.maybeCreate("main$nameX")
-    val testX: SourceSet = sourceSets.maybeCreate("test$nameX")
+    // These generate warnings in Gradle 8.x -- Fixed in 8.4
+    val mainX: SourceSet = sourceSets.maybeCreate("${lower}Main")
+    val testX: SourceSet = sourceSets.maybeCreate("${lower}Test")
 
     // the compile task NAME must match the source-set name
-    val compileMainXJava: JavaCompile = project.tasks.named("compileMain${nameX}Java", JavaCompile::class.java).get()
-    val compileTestXJava: JavaCompile = project.tasks.named("compileTest${nameX}Java", JavaCompile::class.java).get()
+    val compileMainXJava: JavaCompile = project.tasks.named("compile${upper}MainJava", JavaCompile::class.java).get()
+    val compileTestXJava: JavaCompile = project.tasks.named("compile${upper}TestJava", JavaCompile::class.java).get()
 
-    val compileModuleInfoX: JavaCompile = project.tasks.create("compileModuleInfo$nameX", JavaCompile::class.java)
+    val compileModuleInfoX: JavaCompile = project.tasks.create("compileJpmsModuleInfo", JavaCompile::class.java)
 
     lateinit var compileMainXKotlin: TaskProvider<KotlinCompile>
     lateinit var compileTestXKotlin: TaskProvider<KotlinCompile>
@@ -83,7 +78,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
     // have to create a task in order to the files to get "picked up" by intellij/gradle. No *test* task? Then gradle/intellij won't be able run
     // the tests, even if you MANUALLY tell intellij to run a test from the sources dir
     // https://docs.gradle.org/current/dsl/org.gradle.api.tasks.testing.Test.html
-    val runTestX: Test = project.tasks.create("test${nameX}Test", Test::class.java)
+    val runTestX: Test = project.tasks.create("${lower}Test", Test::class.java)
 
     init {
         if (moduleFile == null) {
@@ -135,7 +130,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             })
 
             if (hasKotlin) {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main$nameX")
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("${lower}Main")
 
                 kotlin.kotlin.apply {
                     // I don't like the opinionated sonatype directory structure.
@@ -174,7 +169,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             })
 
             if (hasKotlin) {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test$nameX")
+                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("${lower}Test")
 
                 kotlin.kotlin.apply {
                     // I don't like the opinionated sonatype directory structure.
@@ -219,20 +214,20 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
         //////////////
 
         if (hasKotlin) {
-            compileMainXKotlin = project.tasks.named("compileMain${nameX}Kotlin", KotlinCompile::class.java)
-            compileTestXKotlin = project.tasks.named("compileTest${nameX}Kotlin", KotlinCompile::class.java)
+            compileMainXKotlin = project.tasks.named("compile${upper}MainKotlin", KotlinCompile::class.java)
+            compileTestXKotlin = project.tasks.named("compile${upper}TestKotlin", KotlinCompile::class.java)
         }
 
         // have to setup the configurations, so dependencies work correctly
         val configs = project.configurations
 
-        configs.maybeCreate("main${nameX}Implementation").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("compileOnly"))
-        configs.maybeCreate("main${nameX}Runtime").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("runtimeOnly"))
-        configs.maybeCreate("main${nameX}CompileOnly").extendsFrom(configs.getByName("compileOnly"))
+        configs.maybeCreate("${lower}MainImplementation").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("compileOnly"))
+        configs.maybeCreate("${lower}MainRuntime").extendsFrom(configs.getByName("implementation")).extendsFrom(configs.getByName("runtimeOnly"))
+        configs.maybeCreate("${lower}MainCompileOnly").extendsFrom(configs.getByName("compileOnly"))
 
-        configs.maybeCreate("test${nameX}Implementation").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testCompileOnly"))
-        configs.maybeCreate("test${nameX}Runtime").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testRuntimeOnly"))
-        configs.maybeCreate("test${nameX}CompileOnly").extendsFrom(configs.getByName("testCompileOnly"))
+        configs.maybeCreate("${upper}TestImplementation").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testCompileOnly"))
+        configs.maybeCreate("${upper}TestRuntime").extendsFrom(configs.getByName("testImplementation")).extendsFrom(configs.getByName("testRuntimeOnly"))
+        configs.maybeCreate("${upper}TestCompileOnly").extendsFrom(configs.getByName("testCompileOnly"))
 
 
         // setup task graph and compile version
@@ -278,7 +273,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 dependsOn(compileMainKotlin)
             }
 
-            val proj = this@JavaXConfiguration.project
+            val proj = this@JpmsMultiRelease.project
 
             val allSource = proj.files(
                 main.allSource.srcDirs,
@@ -294,7 +289,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
             inputs.property("moduleName", moduleName)
 
             destinationDirectory.set(compileMainXJava.destinationDirectory.asFile.orNull)
-            classpath = this@JavaXConfiguration.project.files() // this resets the classpath. we use the module-path instead!
+            classpath = this@JpmsMultiRelease.project.files() // this resets the classpath. we use the module-path instead!
 
 
             // modules require this!
@@ -323,7 +318,7 @@ class JavaXConfiguration(javaVersion: JavaVersion, private val project: Project,
                 override fun execute(task: Task) {
                     task as JavaCompile
 
-                    val intellijClasses = File("${this@JavaXConfiguration.project.buildDir}/classes-intellij")
+                    val intellijClasses = File("${this@JpmsMultiRelease.project.buildDir}/classes-intellij")
                     if (intellijClasses.exists()) {
                         // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
                         val directory = task.destinationDirectory.asFile.get()
