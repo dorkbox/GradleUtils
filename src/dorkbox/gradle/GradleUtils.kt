@@ -191,7 +191,7 @@ fun JarFile.addFilesToJar(filesToAdd: List<Pair<File, String>>) {
  *
  * These are NOT lambda's because of issues with gradle.
  */
-fun  org.gradle.jvm.tasks.Jar.safeManifest(action: Action<in org.gradle.api.java.archives.Manifest>) {
+fun org.gradle.jvm.tasks.Jar.safeManifest(action: Action<in org.gradle.api.java.archives.Manifest>) {
     val task = this
 
     task.doFirst(object: Action<Task> {
