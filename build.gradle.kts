@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import java.time.Instant
 
 gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
 
@@ -21,13 +20,13 @@ plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "1.1.0"
+    id("com.gradle.plugin-publish") version "1.2.1"
 
-    id("com.dorkbox.Licensing") version "2.24"
-    id("com.dorkbox.VersionUpdate") version "2.6"
-    id("com.dorkbox.GradleUtils") version "3.10"
+    id("com.dorkbox.GradleUtils") version "3.17"
+    id("com.dorkbox.Licensing") version "2.26"
+    id("com.dorkbox.VersionUpdate") version "2.8"
 
-    kotlin("jvm") version "1.7.20"
+    kotlin("jvm") version "1.8.0"
 }
 
 object Extras {
@@ -41,8 +40,6 @@ object Extras {
     const val id = "GradleUtils"
     const val vendor = "Dorkbox LLC"
     const val url = "https://git.dorkbox.com/dorkbox/GradleUtils"
-
-    val buildDate = Instant.now().toString()
 }
 
 ///////////////////////////////
@@ -103,7 +100,7 @@ tasks.jar.get().apply {
         attributes["Specification-Vendor"] = Extras.vendor
 
         attributes["Implementation-Title"] = "${Extras.group}.${Extras.id}"
-        attributes["Implementation-Version"] = Extras.buildDate
+        attributes["Implementation-Version"] = GradleUtils.now()
         attributes["Implementation-Vendor"] = Extras.vendor
     }
 }
@@ -113,19 +110,18 @@ tasks.jar.get().apply {
 ////////    Plugin Publishing + Release
 /////////////////////////////////
 gradlePlugin {
+    website.set(Extras.url)
+    vcsUrl.set(Extras.url)
+
     plugins {
         create("GradlePublish") {
             id = "${Extras.group}.${Extras.id}"
             implementationClass = "dorkbox.gradle.GradleUtils"
             displayName = Extras.name
             description = Extras.description
+            tags.set(listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management"))
             version = Extras.version
         }
     }
 }
 
-pluginBundle {
-    website = Extras.url
-    vcsUrl = Extras.url
-    tags = listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management")
-}
