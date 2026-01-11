@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("unused")
+
 package dorkbox.gradle
 
+import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.deps.GetVersionInfoTask
 import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.java.archives.Manifest
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.jvm.tasks.Jar
+import org.gradle.kotlin.dsl.property
+import org.gradle.kotlin.dsl.register
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
 import java.net.URL
 import java.util.jar.*
+import kotlin.reflect.KClass
 
 
 /**
@@ -42,9 +51,9 @@ class GradleUtils : Plugin<Project> {
 
     override fun apply(project: Project) {
         val current = GradleVersion.current()
-        if (current < GradleVersion.version("7.0")) {
+        if (current < GradleVersion.version("9.0")) {
             // we require v7+ of gradle to use this version of the util project.
-            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 7.0+ to continue.")
+            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 9.0+ to continue.")
         }
 
         StaticMethodsAndTools.apply(project, "java")
@@ -60,14 +69,14 @@ class GradleUtils : Plugin<Project> {
         // when trying to apply to the sub-projects.
 
         if (project == project.rootProject) {
-            project.tasks.create("updateGradleWrapper", GradleUpdateTask::class.java).apply {
+            project.tasks.register<GradleUpdateTask>("updateGradleWrapper") {
                 group = "gradle"
                 outputs.upToDateWhen { false }
                 outputs.cacheIf { false }
                 description = "Automatically update Gradle to the latest version"
             }
 
-            project.tasks.create("checkGradleVersion", GradleCheckTask::class.java).apply {
+            project.tasks.register<GradleCheckTask>("checkGradleVersion") {
                 group = "gradle"
                 outputs.upToDateWhen { false }
                 outputs.cacheIf { false }
@@ -75,14 +84,17 @@ class GradleUtils : Plugin<Project> {
             }
         }
 
-        project.tasks.create("updateDependencies", GetVersionInfoTask::class.java).apply {
+        project.tasks.register<GetVersionInfoTask>("checkDependencies") {
             group = "gradle"
             outputs.upToDateWhen { false }
             outputs.cacheIf { false }
             description = "Fetch the latest version information for project dependencies"
+
+            savedProject.set(project)
         }
 
-        project.tasks.create("checkKotlin", CheckKotlinTask::class.java).apply {
+
+        project.tasks.register<CheckKotlinTask>("checkKotlin") {
             group = "other"
             outputs.upToDateWhen { false }
             outputs.cacheIf { false }
@@ -91,27 +103,27 @@ class GradleUtils : Plugin<Project> {
     }
 }
 
-fun org.gradle.api.Project.prepLibraries(): PrepLibrariesTask {
+fun Project.prepLibraries(): PrepLibrariesTask {
     return this.tasks.maybeCreate("prepareLibraries", PrepLibrariesTask::class.java)
 }
 
-fun org.gradle.api.Project.getDependenciesAsClasspath(): String {
+fun Project.getDependenciesAsClasspath(): String {
     return this.prepLibraries().getAsClasspath()
 }
 
-fun org.gradle.api.Project.getCompileLibraries(): Map<File, String> {
+fun Project.getCompileLibraries(): Map<File, String> {
     return PrepLibrariesTask.collectCompileLibraries(this.rootProject.allprojects.toTypedArray())
 }
 
-fun org.gradle.api.Project.getRuntimeLibraries(): Map<File, String> {
+fun Project.getRuntimeLibraries(): Map<File, String> {
     return PrepLibrariesTask.collectRuntimeLibraries(this.rootProject.allprojects.toTypedArray())
 }
 
-fun org.gradle.api.Project.copyLibrariesTo(location: File) {
+fun Project.copyLibrariesTo(location: File) {
     return this.project.prepLibraries().copyLibrariesTo(location)
 }
 
-fun org.gradle.api.Project.copyAllLibrariesTo(location: File) {
+fun Project.copyAllLibrariesTo(location: File) {
     return this.project.prepLibraries().copyLibrariesTo(location)
 }
 
@@ -191,18 +203,235 @@ fun JarFile.addFilesToJar(filesToAdd: List<Pair<File, String>>) {
  *
  * These are NOT lambda's because of issues with gradle.
  */
-fun org.gradle.jvm.tasks.Jar.safeManifest(action: Action<in org.gradle.api.java.archives.Manifest>) {
+fun Jar.safeManifest(action: Action<in Manifest>) {
     val task = this
 
-    task.doFirst(object: Action<Task> {
-        override fun execute(task: Task) {
-            task as Jar
+    task.doFirst(Action { task ->
+        task as Jar
 
-            task.manifest(object : Action<org.gradle.api.java.archives.Manifest> {
-                override fun execute(t: org.gradle.api.java.archives.Manifest) {
-                    action.execute(t)
-                }
-            })
-        }
+        task.manifest(Action { t ->
+            action.execute(t) })
     })
 }
+
+/**
+ * Gets all the Maven-style Repository URLs for the specified project (or for the root project if not specified).
+ *
+ * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
+ */
+fun Project.buildScriptRepositoryUrls(onlyRemote: Boolean = true): List<String> {
+    val repositories = mutableListOf<String>()
+    val instance = this.buildscript.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
+
+    @Suppress("DuplicatedCode")
+    instance.forEach { repo ->
+        val resolver = repo.createResolver()
+        if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
+            // println("searching ${resolver.name}")
+            // println(resolver.root)
+            // all maven patterns are the same!
+            // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
+            // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
+            // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
+
+            if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
+                try {
+                    val toURL = resolver.root.toASCIIString()
+                    if (toURL.endsWith('/')) {
+                        repositories.add(toURL)
+                    } else {
+                        // the root doesn't always end with a '/', and we must guarantee that
+                        repositories.add("$toURL/")
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+        }
+    }
+    return repositories
+}
+
+/**
+ * Gets all the Maven-style Repository URLs for the specified project (or for the root project if not specified).
+ *
+ * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
+ */
+fun Project.getProjectRepositoryUrls(onlyRemote: Boolean = true): List<String> {
+    val repositories = mutableListOf<String>()
+    val instance = this.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
+
+    @Suppress("DuplicatedCode")
+    instance.forEach { repo ->
+        val resolver = repo.createResolver()
+        if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
+            // println("searching ${resolver.name}")
+            // println(resolver.root)
+            // all maven patterns are the same!
+            // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
+            // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
+            // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
+
+            if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
+                try {
+                    val toURL = resolver.root.toASCIIString()
+                    if (toURL.endsWith('/')) {
+                        repositories.add(toURL)
+                    } else {
+                        // the root doesn't always end with a '/', and we must guarantee that
+                        repositories.add("$toURL/")
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+        }
+    }
+    return repositories
+}
+
+
+/**
+ * Resolves all dependencies of the project buildscript
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveBuildScriptDependencies(): List<DependencyScanner.Maven> {
+    return this.buildscript.configurations.flatMap { config ->
+        config.resolvedConfiguration
+            .lenientConfiguration
+            .firstLevelModuleDependencies
+            .mapNotNull { dep ->
+                val module = dep.module.id
+                val group = module.group
+                val name = module.name
+                val version = module.version
+
+                DependencyScanner.Maven(group, name, version)
+            }
+    }
+}
+
+
+/**
+ * Resolves all *declared* dependencies of the project
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveAllDeclaredDependencies(): List<DependencyScanner.DependencyData> {
+    // NOTE: we cannot createTree("compile") and createTree("runtime") using the same existingNames and expect correct results.
+    // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
+    // will be incomplete
+
+    // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
+    return (DependencyScanner.scan(this, "compile", false) +
+            DependencyScanner.scan(this, "runtime", false) +
+            DependencyScanner.scan(this, "test", false)
+            ).toSet().toList()
+}
+
+
+/**
+ * Recursively resolves all child dependencies of the project
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveAllDependencies(): List<DependencyScanner.DependencyData> {
+    // NOTE: we cannot createTree("compile") and createTree("runtime") using the same exitingNames and expect correct results.
+    // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
+    // will be incomplete
+
+    // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
+    return (DependencyScanner.scan(this, "compile") +
+            DependencyScanner.scan(this, "runtime") +
+            DependencyScanner.scan(this, "test")
+            ).toSet().toList()
+}
+
+/**
+ * Recursively resolves all child compile dependencies of the project
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveCompileDependencies(): DependencyScanner.ProjectDependencies {
+    val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+    val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
+
+    DependencyScanner.createTree(this, "compileClasspath", projectDependencies, existingNames)
+
+    return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
+}
+
+/**
+ * Recursively resolves all child runtime dependencies of the project
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveRuntimeDependencies(): DependencyScanner.ProjectDependencies {
+    val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+    val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
+
+    DependencyScanner.createTree(this, "runtimeClasspath", projectDependencies, existingNames)
+
+    return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
+}
+
+/**
+ * Recursively resolves all child test dependencies of the project
+ *
+ * THIS MUST BE IN "afterEvaluate" or run from a specific task.
+ */
+fun Project.resolveTestDependencies(): DependencyScanner.ProjectDependencies {
+    val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
+    val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
+
+    DependencyScanner.createTree(this, "testClasspath", projectDependencies, existingNames)
+
+    return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
+}
+
+
+// https://www.danilopianini.org
+//       https://github.com/DanySK/publish-on-central
+//       Copyright 2025
+//         Danilo Pianini
+inline fun <reified T : Any> Project.propertyWithDefault(default: T?): Property<T> =
+    objects.property<T>().apply { convention(default) }
+
+// https://www.danilopianini.org
+//       https://github.com/DanySK/publish-on-central
+//       Copyright 2025
+//         Danilo Pianini
+inline fun <reified T : Any> Project.propertyWithDefaultProvider(noinline default: () -> T?): Property<T> =
+    objects.property<T>().apply { convention(provider(default)) }
+
+// https://www.danilopianini.org
+//       https://github.com/DanySK/publish-on-central
+//       Copyright 2025
+//         Danilo Pianini
+fun <T : Task> Project.registerTaskIfNeeded(
+    name: String,
+    type: KClass<T>,
+    vararg parameters: Any = emptyArray(),
+    configuration: T.() -> Unit = { },
+): TaskProvider<out Task> = runCatching { tasks.named(name) }
+    .recover { exception ->
+        when (exception) {
+            is UnknownTaskException ->
+                tasks.register(name, type, *parameters).apply { configure(configuration) }
+            else -> throw exception
+        }
+    }.getOrThrow()
+
+// https://www.danilopianini.org
+//       https://github.com/DanySK/publish-on-central
+//       Copyright 2025
+//         Danilo Pianini
+fun Project.registerTaskIfNeeded(
+    name: String,
+    vararg parameters: Any = emptyArray(),
+    configuration: DefaultTask.() -> Unit = { },
+): TaskProvider<out Task> = registerTaskIfNeeded(
+    name = name,
+    type = DefaultTask::class,
+    parameters = parameters,
+    configuration = configuration,
+)

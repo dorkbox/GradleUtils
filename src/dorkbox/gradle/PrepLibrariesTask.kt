@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("unused")
+
 package dorkbox.gradle
 
 import org.gradle.api.Action
@@ -50,29 +52,17 @@ PrepLibrariesTask : DefaultTask() {
         }
 
         fun collectCompileLibraries(projects: Array<out Project>): Map<File, String> {
-            lock.read {
-                if (allCompileProjectLibraries.isNotEmpty()) {
-                    return allCompileProjectLibraries
-                }
-            }
-            println("\tCollecting all libraries for: ${projects.joinToString(",") { it.name }}")
-
-            lock.write {
-                val librariesByFileName = mutableMapOf<String, File>()
-
-                projects.forEach { project ->
-                    val tools = StaticMethodsAndTools(project)
-                    collectLibs(tools, project, allCompileProjectLibraries, librariesByFileName)
-                }
-
-                return allCompileProjectLibraries
-            }
+            return collectLibraries(projects, allCompileProjectLibraries)
         }
 
         fun collectRuntimeLibraries(projects: Array<out Project>): Map<File, String> {
+            return collectLibraries(projects, allRuntimeProjectLibraries)
+        }
+
+        private fun collectLibraries(projects: Array<out Project>, libraries: MutableMap<File, String>) : Map<File, String> {
             lock.read {
-                if (allRuntimeProjectLibraries.isNotEmpty()) {
-                    return allRuntimeProjectLibraries
+                if (libraries.isNotEmpty()) {
+                    return libraries
                 }
             }
             println("\tCollecting all libraries for: ${projects.joinToString(",") { it.name }}")
@@ -81,11 +71,10 @@ PrepLibrariesTask : DefaultTask() {
                 val librariesByFileName = mutableMapOf<String, File>()
 
                 projects.forEach { project ->
-                    val tools = StaticMethodsAndTools(project)
-                    collectLibs(tools, project, allRuntimeProjectLibraries, librariesByFileName)
+                    collectLibs(project, libraries, librariesByFileName)
                 }
 
-                return allRuntimeProjectLibraries
+                return libraries
             }
         }
 
@@ -146,12 +135,11 @@ PrepLibrariesTask : DefaultTask() {
         }
 
         private fun collectLibs(
-            tools: StaticMethodsAndTools,
             project: Project,
             librariesByFile: MutableMap<File, String>,
             librariesByFileName: MutableMap<String, File>
         ) {
-            val resolveAllDependencies = tools.resolveRuntimeDependencies(project).dependencies.flatMap { it.artifacts }
+            val resolveAllDependencies = project.resolveRuntimeDependencies().dependencies.flatMap { it.artifacts }
 
             resolveAllDependencies.forEach { artifact ->
                 val file = artifact.file
@@ -225,7 +213,7 @@ PrepLibrariesTask : DefaultTask() {
         val librariesByFileName = mutableMapOf<String, File>()
 
         lock.write {
-            collectLibs(tools, project, projectLibs, librariesByFileName)
+            collectLibs(project, projectLibs, librariesByFileName)
         }
 
         return projectLibs
@@ -238,13 +226,12 @@ PrepLibrariesTask : DefaultTask() {
             return ""
         }
 
-
         val projLibraries = collectLibraries()
         println("\tGetting libraries as classpath for ${project.name}")
 
         val libraries = mutableMapOf<String, File>()
 
-        val resolveAllDependencies = tools.resolveRuntimeDependencies(project).dependencies
+        val resolveAllDependencies = project.resolveRuntimeDependencies().dependencies
         // we must synchronize on it for thread safety
         lock.read {
             resolveAllDependencies.forEach { dep ->

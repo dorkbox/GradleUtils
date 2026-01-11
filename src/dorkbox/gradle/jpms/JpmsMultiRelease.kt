@@ -25,6 +25,7 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 
@@ -247,10 +248,11 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
                 override fun execute(t: KotlinCompile) {
                     t.dependsOn(compileMainKotlin)
 
-                    t.kotlinOptions.jvmTarget = ver
+
+                    t.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
 
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                    t.kotlinOptions.moduleName = project.name
+                    t.compilerOptions.moduleName.set(project.name)
                 }
             })
 
@@ -258,10 +260,10 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
                 override fun execute(t: KotlinCompile) {
                     t.dependsOn(compileTestKotlin)
 
-                    t.kotlinOptions.jvmTarget = ver
+                    t.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
 
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                    t.kotlinOptions.moduleName = project.name
+                    t.compilerOptions.moduleName.set(project.name)
                 }
             })
         }

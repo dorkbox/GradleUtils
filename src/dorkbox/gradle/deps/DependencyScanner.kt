@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package dorkbox.gradle.deps
 
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.ResolvedDependency
 import java.io.File
@@ -33,23 +34,35 @@ object DependencyScanner {
      *
      *    This is an actual problem...
      */
-    fun scan(project: Project, configurationName: String, includeChildren: Boolean = true): List<DependencyData> {
+    fun scan(project: Project, configurationNamePrefix: String, includeChildren: Boolean = true): List<DependencyData> {
 
         val projectDependencies = mutableListOf<DependencyData>()
-        val config = project.configurations.getByName(configurationName)
+
+        project.configurations.filter { it.name.startsWith(configurationNamePrefix) }
+            .map { project.configurations.getByName(it.name) }
+            .forEach { project.scan(it, projectDependencies, includeChildren) }
+
+        return projectDependencies
+    }
+
+
+    private fun Project.scan(config: Configuration,
+                             projectDependencies: MutableList<DependencyData> = mutableListOf<DependencyData>(),
+                             includeChildren: Boolean = true): MutableList<DependencyData> {
+
         if (!config.isCanBeResolved) {
             return projectDependencies
         }
 
         try {
             config.resolve()
-        } catch (e: Throwable) {
-            println("Unable to resolve the $configurationName configuration for the project ${project.name}")
+        } catch (_: Throwable) {
+            println("Unable to resolve the $name configuration for the project ${project.name}")
         }
 
         val list = LinkedList<ResolvedDependency>()
 
-        config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
+        config.resolvedConfiguration.lenientConfiguration.firstLevelModuleDependencies.forEach { dep ->
             list.add(dep)
         }
 
@@ -68,7 +81,7 @@ object DependencyScanner {
                 try {
                     val artifactModule = artifact.moduleVersion.id
                     artifacts.add(Artifact(artifactModule.group, artifactModule.name, artifactModule.version, artifact.file.absoluteFile))
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     println("Error getting artifact for $mavenId, file: ${artifact.file.absoluteFile}")
                 }
             }
@@ -97,7 +110,6 @@ object DependencyScanner {
         projectDependencies: MutableList<Dependency> = mutableListOf(),
         existingDeps: MutableMap<String, Dependency> = mutableMapOf(),
     ): List<Dependency> {
-
         val config = project.configurations.getByName(configurationName)
         if (!config.isCanBeResolved) {
             return projectDependencies
@@ -105,17 +117,17 @@ object DependencyScanner {
 
         try {
             config.resolve()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
             println("Unable to resolve the $configurationName configuration for the project ${project.name}")
         }
 
         // the root parent is tossed out, but not the topmost list of dependencies
         val rootParent = Dependency("", "", "", listOf(), projectDependencies)
 
-        val parentList = LinkedList<Dependency>()
         val list = LinkedList<ResolvedDependency>()
+        val parentList = LinkedList<Dependency>()
 
-        config.resolvedConfiguration.lenientConfiguration.getFirstLevelModuleDependencies(org.gradle.api.specs.Specs.SATISFIES_ALL).forEach { dep ->
+        config.resolvedConfiguration.lenientConfiguration.firstLevelModuleDependencies.forEach { dep ->
             list.add(dep)
             parentList.add(rootParent)
         }

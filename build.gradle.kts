@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+//todo: when updating dependencies, also mark the dependeices that DO NOT exist (because of version problem,etc). also - only show stable tags for deps (instead of all tags)
 gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
 
 plugins {
     java
     `java-gradle-plugin`
 
-    id("com.gradle.plugin-publish") version "1.2.1"
+    id("com.gradle.plugin-publish") version "2.0.0"
 
-    id("com.dorkbox.GradleUtils") version "3.17"
-    id("com.dorkbox.Licensing") version "2.26"
+    id("com.dorkbox.GradleUtils") version "3.23"
+    id("com.dorkbox.Licensing") version "3.0"
     id("com.dorkbox.VersionUpdate") version "2.8"
 
-    kotlin("jvm") version "1.8.0"
+    kotlin("jvm") version "2.3.0"
 }
 
 object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.18"
+    const val version = "3.23"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -75,16 +75,19 @@ repositories {
 }
 
 dependencies {
+    api(gradleApi())
+    api(gradleKotlinDsl())
+
     // compile only, so we don't force kotlin/dsl version info into dependencies
 
     // the kotlin version is taken from the plugin, so it is not necessary to set it here
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // for easier OS identification
-    implementation("com.dorkbox:OS:1.6")
+    implementation("com.dorkbox:OS:1.11")
 
     // for parsing JSON when updating gradle
-    implementation("org.json:json:20230227")
+    implementation("org.json:json:20251224")
 
     // for parsing version information from maven
     implementation("com.dorkbox:Version:3.1")
@@ -114,7 +117,7 @@ gradlePlugin {
     vcsUrl.set(Extras.url)
 
     plugins {
-        create("GradlePublish") {
+        register("GradlePublish") {
             id = "${Extras.group}.${Extras.id}"
             implementationClass = "dorkbox.gradle.GradleUtils"
             displayName = Extras.name

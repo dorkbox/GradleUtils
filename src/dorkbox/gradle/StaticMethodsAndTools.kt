@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,20 @@
  */
 package dorkbox.gradle
 
-import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.jpms.JpmsMultiRelease
 import dorkbox.gradle.jpms.JpmsOnly
 import dorkbox.gradle.jpms.JpmsSourceSetContainer
 import dorkbox.os.OS
 import org.gradle.api.*
 import org.gradle.api.file.DuplicatesStrategy
-import org.gradle.api.specs.Specs
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.jvm.tasks.Jar
 import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
 import org.gradle.util.GradleVersion
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmCompilerOptions
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
@@ -39,7 +40,7 @@ import kotlin.reflect.full.declaredMemberProperties
 
 
 @Suppress("unused", "MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
-open class StaticMethodsAndTools(private val project: Project) {
+open class StaticMethodsAndTools(val project: Project) {
     companion object {
         /**
          * If the kotlin plugin is applied, and there is a compileKotlin task.. Then kotlin is enabled
@@ -87,12 +88,14 @@ open class StaticMethodsAndTools(private val project: Project) {
                 project.pluginManager.apply(id)
             }
         }
+
+
     }
 
-    val isUnix = org.gradle.internal.os.OperatingSystem.current().isUnix
-    val isLinux = org.gradle.internal.os.OperatingSystem.current().isLinux
-    val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
-    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
+    val isUnix  get() = org.gradle.internal.os.OperatingSystem.current().isUnix
+    val isLinux get() = org.gradle.internal.os.OperatingSystem.current().isLinux
+    val isMac   get() = org.gradle.internal.os.OperatingSystem.current().isMacOsX
+    val isWindows get() = org.gradle.internal.os.OperatingSystem.current().isWindows
 
     @Volatile
     private var debug = false
@@ -100,7 +103,9 @@ open class StaticMethodsAndTools(private val project: Project) {
     private var fixedSWT = false
 
     // this is lazy, because it MUST be initialized from a task!
-    val hasKotlin: Boolean by lazy { hasKotlin(project, debug) }
+    val hasKotlin: Boolean by lazy {
+        hasKotlin(project, debug)
+    }
 
     /**
      * Get the time now as a string. This is to reduce the import requirements in a gradle build file
@@ -235,163 +240,6 @@ open class StaticMethodsAndTools(private val project: Project) {
         }
     }
 
-    /**
-     * Gets all of the Maven-style Repository URLs for the specified project (or for the root project if not specified).
-     *
-     * @param project which project to get the repository root URLs for
-     * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
-     */
-    fun getProjectRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
-        val repositories = mutableListOf<String>()
-        val instance = project.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
-
-        @Suppress("DuplicatedCode")
-        instance.forEach { repo ->
-            val resolver = repo.createResolver()
-            if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
-                // println("searching ${resolver.name}")
-                // println(resolver.root)
-                // all maven patterns are the same!
-                // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
-                // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
-                // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
-
-                if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
-                    try {
-                        val toURL = resolver.root.toASCIIString()
-                        if (toURL.endsWith('/')) {
-                            repositories.add(toURL)
-                        } else {
-                            // the root doesn't always end with a '/', and we must guarantee that
-                            repositories.add("$toURL/")
-                        }
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-        }
-        return repositories
-    }
-
-    /**
-     * Gets all of the Maven-style Repository URLs for the specified project (or for the root project if not specified).
-     *
-     * @param project which project to get the repository root URLs for
-     * @param onlyRemote true to ONLY get the remote repositories (ie: don't include mavenLocal)
-     */
-    fun getProjectBuildScriptRepositoryUrls(project: Project = this.project, onlyRemote: Boolean = true): List<String> {
-        val repositories = mutableListOf<String>()
-        val instance = project.buildscript.repositories.filterIsInstance<org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository>()
-
-        @Suppress("DuplicatedCode")
-        instance.forEach { repo ->
-            val resolver = repo.createResolver()
-            if (resolver is org.gradle.api.internal.artifacts.repositories.resolver.MavenResolver) {
-                // println("searching ${resolver.name}")
-                // println(resolver.root)
-                // all maven patterns are the same!
-                // https://plugins.gradle.org/m2/com/dorkbox/Utilities/maven-metadata.xml
-                // https://repo1.maven.org/maven2/com/dorkbox/Utilities/maven-metadata.xml
-                // https://repo.maven.apache.org/com/dorkbox/Utilities/maven-metadata.xml
-
-                if ((onlyRemote && !resolver.isLocal) || !onlyRemote) {
-                    try {
-                        val toURL = resolver.root.toASCIIString()
-                        if (toURL.endsWith('/')) {
-                            repositories.add(toURL)
-                        } else {
-                            // the root doesn't always end with a '/', and we must guarantee that
-                            repositories.add("$toURL/")
-                        }
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-        }
-        return repositories
-    }
-
-    /**
-     * Resolves all dependencies of the project buildscript
-     *
-     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
-     */
-    fun resolveBuildScriptDependencies(project: Project = this.project): List<DependencyScanner.Maven> {
-        return project.buildscript.configurations.flatMap { config ->
-            config.resolvedConfiguration
-                .lenientConfiguration
-                .getFirstLevelModuleDependencies(Specs.SATISFIES_ALL)
-                .mapNotNull { dep ->
-                    val module = dep.module.id
-                    val group = module.group
-                    val name = module.name
-                    val version = module.version
-
-                    DependencyScanner.Maven(group, name, version)
-                }
-        }
-    }
-
-    /**
-     * Resolves all *declared* dependencies of the project
-     *
-     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
-     */
-    fun resolveAllDeclaredDependencies(project: Project = this.project): List<DependencyScanner.DependencyData> {
-        // NOTE: we cannot createTree("compile") and createTree("runtime") using the same exitingNames and expect correct results.
-        // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
-        // will be incomplete
-
-        // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
-        return (DependencyScanner.scan(project, "compileClasspath", false) +
-                DependencyScanner.scan(project, "runtimeClasspath", false)
-                ).toSet().toList()
-    }
-
-
-    /**
-     * Recursively resolves all child dependencies of the project
-     *
-     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
-     */
-    fun resolveAllDependencies(project: Project = this.project): List<DependencyScanner.DependencyData> {
-        // NOTE: we cannot createTree("compile") and createTree("runtime") using the same exitingNames and expect correct results.
-        // This is because a dependency might exist for compile and runtime, but have different children, therefore, the list
-        // will be incomplete
-
-        // there will be DUPLICATES! (we don't care about children or hierarchy, so we remove the dupes)
-        return (DependencyScanner.scan(project, "compileClasspath") +
-                DependencyScanner.scan(project, "runtimeClasspath")
-                ).toSet().toList()
-    }
-
-    /**
-     * Recursively resolves all child compile dependencies of the project
-     *
-     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
-     */
-    fun resolveCompileDependencies(project: Project = this.project): DependencyScanner.ProjectDependencies {
-        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
-        val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
-
-        DependencyScanner.createTree(project, "compileClasspath", projectDependencies, existingNames)
-
-        return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
-    }
-
-    /**
-     * Recursively resolves all child compile dependencies of the project
-     *
-     * THIS MUST BE IN "afterEvaluate" or run from a specific task.
-     */
-    fun resolveRuntimeDependencies(project: Project = this.project): DependencyScanner.ProjectDependencies {
-        val projectDependencies = mutableListOf<DependencyScanner.Dependency>()
-        val existingNames = mutableMapOf<String, DependencyScanner.Dependency>()
-
-        DependencyScanner.createTree(project, "runtimeClasspath", projectDependencies, existingNames)
-
-        return DependencyScanner.ProjectDependencies(projectDependencies, existingNames.map { it.value })
-    }
 
     /**
      * set gradle project defaults, as used by dorkbox, llc
@@ -432,7 +280,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             try {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
+                val kotlin = project.extensions.getByType(KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("src"))
                     include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
@@ -450,7 +298,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
 
             try {
-                val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
+                val kotlin = project.extensions.getByType(KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("test"))
                     include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
@@ -465,9 +313,9 @@ open class StaticMethodsAndTools(private val project: Project) {
     /**
      * Fix the compiled output from intellij to be SEPARATE from gradle.
      *
-     * NOTE: This only affects NEW projects inported into intellji from gradle!
+     * NOTE: This only affects NEW projects imported into intellji from gradle!
      */
-    fun fixIntellijPaths(location: String = "${project.buildDir}/classes-intellij") {
+    fun fixIntellijPaths(location: String = "${project.layout.buildDirectory.asFile.get()}/classes-intellij") {
         val intellijDir = File(location)
 
         try {
@@ -603,13 +451,13 @@ open class StaticMethodsAndTools(private val project: Project) {
         })
 
         // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
-        project.tasks.withType(org.gradle.jvm.tasks.Jar::class.java, object: Action<Jar> {
-            override fun execute(task: Jar) {
+        project.tasks.withType(Zip::class.java, object: Action<Zip> {
+            override fun execute(task: Zip) {
                 task.duplicatesStrategy = DuplicatesStrategy.FAIL
 
                 task.doLast(object: Action<Task> {
                     override fun execute(task: Task) {
-                        task as Jar
+                        task as Zip
 
                         if (task.didWork) {
                             val file = task.archiveFile.get().asFile
@@ -643,7 +491,9 @@ open class StaticMethodsAndTools(private val project: Project) {
      */
     fun compileConfiguration(javaVersion: JavaVersion,
                              kotlinJavaVersion: JavaVersion = javaVersion,
-                             kotlinActions: org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions.() -> Unit = {}) {
+                             kotlinActions: KotlinJvmCompilerOptions.() -> Unit = {}) {
+
+        @Suppress("UnusedExpression")
         val kotlinJavaVer = kotlinJavaVersion.toString().also {
             if (it.startsWith("1.")) {
                 if (it == "1.6" || it == "1.8") {
@@ -656,7 +506,9 @@ open class StaticMethodsAndTools(private val project: Project) {
             }
         }
 
+        val kotlinJvmTarget = JvmTarget.fromTarget(kotlinJavaVer)
         val kotlinVer = KotlinUtil.getKotlinVersion(project)
+        val kotlinVerAsEnum = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.fromVersion(kotlinVer)
 
         compileConfiguration(javaVersion)
 
@@ -664,22 +516,21 @@ open class StaticMethodsAndTools(private val project: Project) {
             // NOTE: these must be anonymous inner classes because gradle cannot handle this in kotlin 1.5
             project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java, object: Action<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
                 override fun execute(task: org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
+                    task.compilerOptions.jvmTarget.set(kotlinJvmTarget)
+
+                    // default is whatever the version is that we are running, or XXXXX if we cannot figure it out
+                    task.compilerOptions.apiVersion.set(kotlinVerAsEnum)
+                    task.compilerOptions.languageVersion.set(kotlinVerAsEnum)
+
+                    // see: https://kotlinlang.org/docs/reference/using-gradle.html
+                    kotlinActions(task.compilerOptions)
+
                     task.doFirst(object: Action<Task> {
                         override fun execute(it: Task) {
                             it as org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-                            println("\tCompiling classes to Kotlin ${it.kotlinOptions.languageVersion}, Java ${it.kotlinOptions.jvmTarget}")
+                            println("\tCompiling classes to Kotlin $kotlinVer, Java $kotlinJavaVer")
                         }
                     })
-
-
-                    task.kotlinOptions.jvmTarget = kotlinJavaVer
-
-                    // default is whatever the version is that we are running, or XXXXX if we cannot figure it out
-                    task.kotlinOptions.apiVersion = kotlinVer
-                    task.kotlinOptions.languageVersion = kotlinVer
-
-                    // see: https://kotlinlang.org/docs/reference/using-gradle.html
-                    kotlinActions(task.kotlinOptions)
                 }
             })
 
@@ -803,7 +654,7 @@ open class StaticMethodsAndTools(private val project: Project) {
             project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java, object: Action<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
                 override fun execute(task: org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
                     // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                    task.kotlinOptions.moduleName = moduleName
+                    task.compilerOptions.moduleName.set(moduleName)
                 }
             })
 

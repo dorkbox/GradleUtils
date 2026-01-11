@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,14 @@
 
 package dorkbox.gradle.deps
 
-import dorkbox.gradle.StaticMethodsAndTools
-import dorkbox.version.Version
+import dorkbox.gradle.buildScriptRepositoryUrls
+import dorkbox.gradle.getProjectRepositoryUrls
+import dorkbox.gradle.resolveAllDeclaredDependencies
+import dorkbox.gradle.resolveBuildScriptDependencies
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import java.io.InputStreamReader
 import java.net.URL
@@ -27,74 +31,10 @@ import java.util.concurrent.*
 import java.util.concurrent.locks.*
 import kotlin.concurrent.write
 
-open class
-GetVersionInfoTask : DefaultTask() {
-    private data class VersionHolder(var release: String?, val versions: MutableSet<String>) {
-        var dirtyVersions = false
-
-        fun updateReleaseVersion(version: String) {
-            val curRelease = release
-            if (curRelease == null) {
-                release = version
-            } else {
-                // there can be errors when parsing version info, since not all version strings follow semantic versioning
-                try {
-                    val currentVersion = Version(curRelease)
-                    val releaseVer = Version(version)
-
-                    if (releaseVer.greaterThan(currentVersion)) {
-                        release = version
-                    }
-                } catch (e: Exception) {
-                    // ignored
-                }
-            }
-        }
-
-        fun addVersion(ver: String) {
-            if (!versions.contains(ver)) {
-                versions.add(ver)
-            } else {
-                dirtyVersions = true
-            }
-        }
-
-        fun getVersionOptions(currentVersion: String): List<String> {
-            // there can be errors when parsing version info, since not all version strings follow semantic versioning
-            // first! try version sorting. This may fail!
-
-            // there are no duplicates in this list
-            try {
-                // this creates a LOT of version objects. Probably better to store these in a list, however we want all backing data
-                // structures to be strings.
-                val curVersion = Version(currentVersion)
-                return versions.sortedWith { o1, o2 ->
-                    Version(o1).compareTo(Version(o2))
-                }.filter {
-                    Version(it).greaterThan(curVersion)
-                }.toList()
-            } catch (e: Exception) {
-                // WHOOPS! There was an invalid version number! Instead of just crashing, try a different way...
-                if (dirtyVersions) {
-                    // no idea, honestly... the list might not even be in order! Just return the entire thing and let the user sort it out
-                    return versions.toMutableList().apply { add(0, "Error parsing!") }.toList()
-                } else {
-                    // fortunately for us, the usually the maven order of version data is IN-ORDER, so we can "cheat" the system and look at
-                    // indexing instead
-                    val myVersionIndex = versions.indexOfFirst { it == currentVersion }
-        //            println("INDEX: ${myVersionIndex}" )
-                    return if (myVersionIndex >= 0) {
-                        return versions.filterIndexed { index, _ -> index > myVersionIndex }
-                    } else {
-                        versions.toMutableList().apply { add(0, "Error parsing!") }.toList()
-                    }
-                }
-            }
-        }
-    }
-
+abstract class GetVersionInfoTask : DefaultTask() {
     companion object {
-        private val releaseMatcher = """(<release>)(.*)(<\/release>)""".toRegex()
+        private val releaseMatcher = """(<release>)(.*)(</release>)""".toRegex()
+        private const val GRADLE_PLUGIN_REPO = "https://plugins.gradle.org/m2/"
 
         private val httpDispatcher = Executors.newFixedThreadPool(8)
 
@@ -118,6 +58,7 @@ GetVersionInfoTask : DefaultTask() {
                 else
                     "${mergedDep.group.replace(".", "/")}/${mergedDep.name}/maven-metadata.xml"
 
+
                 val mavenIdKey = DependencyScanner.Maven(mergedDep.group, mergedDep.name)
 
                 // version info is per dependency
@@ -131,13 +72,14 @@ GetVersionInfoTask : DefaultTask() {
                     repositories.forEach { repoUrl ->
                         try {
                             val url = URL(repoUrl + metadataUrl)
-                            // println("Trying: $url")
+//println("URL: $url")
 
                             with(url.openConnection() as java.net.HttpURLConnection) {
                                 var inVersioningSection = false
-                                InputStreamReader(inputStream).readLines().forEach { line ->
+                                val inputStreamReader = InputStreamReader(inputStream)
+                                inputStreamReader.readLines().forEach { line ->
                                     val trimmed = line.trim()
-
+//println("Reading: $line")
                                     if (!inVersioningSection) {
                                         if (trimmed == "<versioning>") {
                                             inVersioningSection = true
@@ -152,7 +94,7 @@ GetVersionInfoTask : DefaultTask() {
                                         val matchResult = releaseMatcher.find(trimmed)
                                         if (matchResult != null) {
                                             val (_, ver, _) = matchResult.destructured
-//                                        println("Release: ${mergedDep.group}:${mergedDep.name} $ver")
+//println("Release: ${mergedDep.group}:${mergedDep.name} $ver")
                                             downloadLock.write {
                                                 mergedVersionInfo[mavenIdKey]!!.updateReleaseVersion(ver)
                                             }
@@ -168,7 +110,7 @@ GetVersionInfoTask : DefaultTask() {
 
                                             downloadLock.write {
                                                 versions.forEach { ver ->
-//                                                    println("Version: ${mergedDep.group}:${mergedDep.name} $ver")
+//println("Version: ${mergedDep.group}:${mergedDep.name} $ver")
                                                     mergedVersionInfo[mavenIdKey]!!.addVersion(ver)
                                                 }
                                             }
@@ -176,7 +118,7 @@ GetVersionInfoTask : DefaultTask() {
                                     }
                                 }
                             }
-                        } catch (ignored: Exception) {
+                        } catch (_: Exception) {
                         }
                     }
                 }
@@ -193,14 +135,15 @@ GetVersionInfoTask : DefaultTask() {
             }
         }
 
-        fun scriptDependencies(staticMethodsAndTools: StaticMethodsAndTools, project: Project) {
-            val repositories = staticMethodsAndTools.getProjectBuildScriptRepositoryUrls(project)
+        fun scriptDependencies(project: Project) {
+            val repositories = project.buildScriptRepositoryUrls()
+            val scriptDependencies = project.resolveBuildScriptDependencies()
+
 
             val latestVersionInfo = mutableListOf<DependencyScanner.Maven>()
             val oldVersionInfo = mutableListOf<Pair<DependencyScanner.Maven, VersionHolder>>()
             val unknownVersionInfo = mutableListOf<DependencyScanner.Maven>()
 
-            val scriptDependencies = staticMethodsAndTools.resolveBuildScriptDependencies(project)
 
             // we can have MULTIPLE versions of a single dependency in use!!
             val mergedDeps = mutableMapOf<DependencyScanner.Maven, MutableSet<DependencyScanner.Maven>>()
@@ -211,7 +154,7 @@ GetVersionInfoTask : DefaultTask() {
 
             // for script dependencies, ALWAYS add the gradle plugin repo!
             // (we hardcode the value, this is not likely to change, but easy enough to fix if it does...)
-            val (futures, versionHolders) = getLatestVersionInfo(listOf("https://plugins.gradle.org/m2/"), mergedDeps, forGradleScripts = true)
+            val (futures, versionHolders) = getLatestVersionInfo(listOf(GRADLE_PLUGIN_REPO), mergedDeps, forGradleScripts = true)
             val (futures2, _) = getLatestVersionInfo(repositories, mergedDeps, versionHolders)
 
             if (mergedDeps.isNotEmpty()) {
@@ -266,15 +209,9 @@ GetVersionInfoTask : DefaultTask() {
 
                     oldVersionInfo.forEach { (dep, versionHolder) ->
                         // list release version AND all other versions greater than my version
-                        val possibleVersionChoices = versionHolder.getVersionOptions(dep.version)
-                        if (possibleVersionChoices.size > 1) {
-                            // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
-                            println("\t - ${dep.group}:${dep.version} -> ${versionHolder.release}  $possibleVersionChoices")
-                        } else {
-                            // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
-                            println("\t - ${dep.group}:${dep.version} -> ${versionHolder.release}")
-                        }
-//                        println("\t - ${dep.group}:${dep.version} -> ${versionHolder.versions}")
+
+                        // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
+                        println("\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}")
                     }
                 }
 
@@ -291,19 +228,22 @@ GetVersionInfoTask : DefaultTask() {
             }
         }
 
-        private fun projectDependencies(staticMethodsAndTools: StaticMethodsAndTools, project: Project) {
+        private fun projectDependencies(project: Project) {
+            val allprojects = project.allprojects
+
             val mergedDeps = mutableMapOf<DependencyScanner.Maven, MutableSet<DependencyScanner.Maven>>()
             val mergedRepos = mutableSetOf<String>()
 
-            project.allprojects.forEach { subProject ->
-                staticMethodsAndTools.resolveAllDeclaredDependencies(subProject).forEach { dep ->
+
+            allprojects.forEach { subProject ->
+                subProject.resolveAllDeclaredDependencies().forEach { dep ->
                     val deps = mergedDeps.getOrPut(DependencyScanner.Maven(dep.group, dep.name)) { mutableSetOf() }
                     deps.add(DependencyScanner.Maven(dep.group, dep.name, dep.version))
                 }
 
                 // also grab all the repos. There will be MORE repos than necessary, but this way we can collate all of our date in a
                 // sane and orderly manner
-                mergedRepos.addAll(staticMethodsAndTools.getProjectRepositoryUrls(subProject))
+                mergedRepos.addAll(subProject.getProjectRepositoryUrls())
             }
 
 
@@ -327,7 +267,7 @@ GetVersionInfoTask : DefaultTask() {
 
 
             // now for project dependencies!
-            project.allprojects.forEach { subProject ->
+            allprojects.forEach { subProject ->
                 mergedDeps.clear()
                 latestVersionInfo.clear()
                 oldVersionInfo.clear()
@@ -336,7 +276,7 @@ GetVersionInfoTask : DefaultTask() {
 
                 // look up each project version dep info (now that we have all dep info)
 
-                staticMethodsAndTools.resolveAllDeclaredDependencies(subProject).forEach { dep ->
+                subProject.resolveAllDeclaredDependencies().forEach { dep ->
                     val deps = mergedDeps.getOrPut(DependencyScanner.Maven(dep.group, dep.name)) { mutableSetOf() }
                     deps.add(DependencyScanner.Maven(dep.group, dep.name, dep.version))
                 }
@@ -388,12 +328,7 @@ GetVersionInfoTask : DefaultTask() {
 
                         oldVersionInfo.forEach { (dep, versionHolder) ->
                             // list release version AND all other versions greater than my version
-                            val possibleVersionChoices = versionHolder.getVersionOptions(dep.version)
-                            if (possibleVersionChoices.size > 1) {
-                                println("\t - ${dep.group}:${dep.name}:${dep.version} -> ${versionHolder.release}  $possibleVersionChoices")
-                            } else {
-                                println("\t - ${dep.group}:${dep.name}:${dep.version} -> ${versionHolder.release}")
-                            }
+                            println("\t - ${dep.group}:${dep.name}:${dep.version} ${versionHolder.toVersionString(dep)}")
                         }
                     }
 
@@ -411,16 +346,17 @@ GetVersionInfoTask : DefaultTask() {
         }
     }
 
+    @get:Internal
+    abstract val savedProject: Property<Project>
+
     @TaskAction
     fun run() {
-        val staticMethodsAndTools = StaticMethodsAndTools(project)
-
-        scriptDependencies(staticMethodsAndTools, project)
+        scriptDependencies(savedProject.get())
 
         println()
         println()
         println()
 
-        projectDependencies(staticMethodsAndTools, project)
+        projectDependencies(savedProject.get())
     }
 }
