@@ -1,7 +1,7 @@
  - GradleUtils - Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies
    [The Apache Software License, Version 2.0]
    https://git.dorkbox.com/dorkbox/GradleUtils
-   Copyright 2025
+   Copyright 2026
      Dorkbox LLC
 
    Extra license information
@@ -17,7 +17,7 @@
        [The JSON License]
        https://github.com/stleary/JSON-java
        https://www.json.org/json-en.html
-       Copyright 2025
+       Copyright 2026
          JSON.org
 
      - OS - Information about the system, Java runtime, OS, Window Manager, and Desktop Environment.
@@ -84,3 +84,11 @@
                  JetBrains s.r.o. and Kotlin Programming Language contributors
                Kotlin Compiler, Test Data+Libraries, and Tools repository contain third-party code, to which different licenses may apply
                See: https://github.com/JetBrains/kotlin/blob/master/license/README.md
+
+
+ - GradleUtils - Code used from https://github.com/DanySK
+   [The Apache Software License, Version 2.0]
+   https://github.com/DanySK/publish-on-central
+   https://github.com/DanySK/maven-central-portal-kotlin-api
+   Copyright 2026
+     Danilo Pianini

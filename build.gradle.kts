@@ -22,7 +22,7 @@ plugins {
 
     id("com.gradle.plugin-publish") version "2.0.0"
 
-    id("com.dorkbox.GradleUtils") version "3.23"
+    id("com.dorkbox.GradleUtils") version "3.25"
     id("com.dorkbox.Licensing") version "3.0"
     id("com.dorkbox.VersionUpdate") version "2.8"
 
@@ -33,7 +33,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "3.23"
+    const val version = "3.25"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -56,17 +56,12 @@ licensing {
         author(Extras.vendor)
         url(Extras.url)
     }
-}
 
-sourceSets {
-    main {
-        java {
-            setSrcDirs(listOf("src"))
-
-            // want to include kotlin and java files for the source. 'setSrcDirs' resets includes...
-            // NOTE: if we DO NOT do this, then there will not be any sources in the "plugin sources" jar, as it expects only java
-            include("**/*.kt", "**/*.java")
-        }
+    license(License.APACHE_2) {
+        description("Code used from https://github.com/DanySK")
+        author("Danilo Pianini")
+        url("https://github.com/DanySK/publish-on-central")
+        url("https://github.com/DanySK/maven-central-portal-kotlin-api")
     }
 }
 
