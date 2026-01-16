@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,16 @@
 package dorkbox.gradle.jpms
 
 import dorkbox.gradle.StaticMethodsAndTools
-import org.gradle.api.*
-import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
+import org.gradle.api.Project
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
@@ -38,7 +40,7 @@ import java.io.File
 //jar --create --file mr.jar -C target/classes . --release 9 -C
 //target/classes-java9 .
 
-@Suppress("MemberVisibilityCanBePrivate", "ObjectLiteralToLambda")
+@Suppress("MemberVisibilityCanBePrivate")
 class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, gradleUtils: StaticMethodsAndTools) {
     val ver: String = javaVersion.majorVersion
 
@@ -71,15 +73,15 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
     val compileMainXJava: JavaCompile = project.tasks.named("compile${upper}MainJava", JavaCompile::class.java).get()
     val compileTestXJava: JavaCompile = project.tasks.named("compile${upper}TestJava", JavaCompile::class.java).get()
 
-    val compileModuleInfoX: JavaCompile = project.tasks.create("compileJpmsModuleInfo", JavaCompile::class.java)
+    val compileModuleInfoX: TaskProvider<JavaCompile> = project.tasks.register<JavaCompile>("compileJpmsModuleInfo")
 
     lateinit var compileMainXKotlin: TaskProvider<KotlinCompile>
     lateinit var compileTestXKotlin: TaskProvider<KotlinCompile>
 
-    // have to create a task in order to the files to get "picked up" by intellij/gradle. No *test* task? Then gradle/intellij won't be able run
+    // have to create a task to get the files to get "picked up" by intellij/gradle. No *test* task? Then gradle/intellij won't be able run
     // the tests, even if you MANUALLY tell intellij to run a test from the sources dir
     // https://docs.gradle.org/current/dsl/org.gradle.api.tasks.testing.Test.html
-    val runTestX: Test = project.tasks.create("${lower}Test", Test::class.java)
+    val runTestX: TaskProvider<Test> = project.tasks.register<Test>("${lower}Test")
 
     init {
         if (moduleFile == null) {
@@ -119,16 +121,14 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
         mainX.apply {
             val files = project.files("src$ver")
 
-            java(object: Action<SourceDirectorySet> {
-                override fun execute(t: SourceDirectorySet) {
-                    // I don't like the opinionated sonatype directory structure.
-                    t.setSrcDirs(files)
-                    t.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
-                    t.exclude("**/module-info.java", "**/EmptyClass.java") // we have to compile these in a different step!
+            java { task ->
+                // I don't like the opinionated sonatype directory structure.
+                task.setSrcDirs(files)
+                task.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+                task.exclude("**/module-info.java", "**/EmptyClass.java") // we have to compile these in a different step!
 
-                    // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
-                }
-            })
+                // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
+            }
 
             if (hasKotlin) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("${lower}Main")
@@ -160,14 +160,12 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
         testX.apply {
             val files = project.files("test$ver")
 
-            java(object: Action<SourceDirectorySet> {
-                override fun execute(t: SourceDirectorySet) {
-                    t.setSrcDirs(files)
-                    t.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
+            java { task ->
+                task.setSrcDirs(files)
+                task.include("**/*.java") // want to include java files for the source. 'setSrcDirs' resets includes...
 
-                    // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
-                }
-            })
+                // note: if we set the destination path, that location will be DELETED when the compile for these sources starts...
+            }
 
             if (hasKotlin) {
                 val kotlin = project.extensions.getByType(org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension::class.java).sourceSets.getByName("${lower}Test")
@@ -197,16 +195,16 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
         }
 
         // run the testX verification
-        runTestX.apply {
+        runTestX.configure { task ->
 //            dependsOn("test")
-            description = "Runs Java $ver tests"
-            group = "verification"
+            task.description = "Runs Java $ver tests"
+            task.group = "verification"
 
 //            shouldRunAfter("test")
 
             // The directories for the compiled test sources.
-            testClassesDirs = testX.output.classesDirs
-            classpath += testX.runtimeClasspath
+            task.testClassesDirs = testX.output.classesDirs
+            task.classpath += testX.runtimeClasspath
         }
 
         //////////////
@@ -244,35 +242,30 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
         }
 
         if (hasKotlin) {
-            compileMainXKotlin.configure(object: Action<KotlinCompile> {
-                override fun execute(t: KotlinCompile) {
-                    t.dependsOn(compileMainKotlin)
+            compileMainXKotlin.configure { task ->
+                task.dependsOn(compileMainKotlin)
 
+                task.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
 
-                    t.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
+                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                task.compilerOptions.moduleName.set(project.name)
+            }
 
-                    // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                    t.compilerOptions.moduleName.set(project.name)
-                }
-            })
+            compileTestXKotlin.configure { task ->
+                task.dependsOn(compileTestKotlin)
 
-            compileTestXKotlin.configure(object: Action<KotlinCompile> {
-                override fun execute(t: KotlinCompile) {
-                    t.dependsOn(compileTestKotlin)
+                task.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
 
-                    t.compilerOptions.jvmTarget.set(JvmTarget.fromTarget(ver))
-
-                    // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
-                    t.compilerOptions.moduleName.set(project.name)
-                }
-            })
+                // must be the same module name as the regular one (which is the project name). If it is a different name, it crashes at runtime
+                task.compilerOptions.moduleName.set(project.name)
+            }
         }
 
-        compileModuleInfoX.apply {
+        compileModuleInfoX.configure { task ->
             // we need all the compiled classes before compiling module-info.java
-            dependsOn(compileMainJava)
+            task.dependsOn(compileMainJava)
             if (hasKotlin) {
-                dependsOn(compileMainKotlin)
+                task.dependsOn(compileMainKotlin)
             }
 
             val proj = this@JpmsMultiRelease.project
@@ -282,108 +275,97 @@ class JpmsMultiRelease(javaVersion: JavaVersion, private val project: Project, g
                 mainX.allSource.srcDirs
             )
 
-            source = allSource.asFileTree // the files live in this location
-            include("**/module-info.java")
+            task.source = allSource.asFileTree // the files live in this location
+            task.include("**/module-info.java")
 
-            sourceCompatibility = ver
-            targetCompatibility = ver
+            task.sourceCompatibility = ver
+            task.targetCompatibility = ver
 
-            inputs.property("moduleName", moduleName)
+            task.inputs.property("moduleName", moduleName)
 
-            destinationDirectory.set(compileMainXJava.destinationDirectory.asFile.orNull)
-            classpath = this@JpmsMultiRelease.project.files() // this resets the classpath. we use the module-path instead!
+            task.destinationDirectory.set(compileMainXJava.destinationDirectory.asFile.orNull)
+            task.classpath = this@JpmsMultiRelease.project.files() // this resets the classpath. we use the module-path instead!
 
 
             // modules require this!
-            doFirst(object: Action<Task> {
-                override fun execute(task: Task) {
-                    task as JavaCompile
+            task.doFirst {
+                val allCompiled = if (hasKotlin) {
+                    proj.files(compileMainJava.destinationDirectory.asFile.orNull, compileMainKotlin.destinationDirectory.asFile.orNull)
+                } else {
+                    proj.files(compileMainJava.destinationDirectory.asFile.orNull)
+                }
 
-                    val allCompiled = if (hasKotlin) {
-                        proj.files(compileMainJava.destinationDirectory.asFile.orNull, compileMainKotlin.destinationDirectory.asFile.orNull)
-                    } else {
-                        proj.files(compileMainJava.destinationDirectory.asFile.orNull)
+                // the SOURCE of the module-info.java file. It uses **EVERYTHING**
+                task.options.sourcepath = allSource
+                task.options.compilerArgs.addAll(listOf(
+                    "-implicit:none",
+                    "-Xpkginfo:always",  // compile the package-info.java files as well (normally it does not)
+                    "--module-path", main.compileClasspath.asPath,
+                    "--patch-module", "$moduleName=" + allCompiled.asPath // add our existing, compiled classes so module-info can find them
+                ))
+            }
+
+
+            task.doLast {
+                val intellijClasses = File("${this@JpmsMultiRelease.project.layout.buildDirectory}/classes-intellij")
+                if (intellijClasses.exists()) {
+                    // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
+                    val directory = task.destinationDirectory.asFile.get()
+
+                    val moduleInfo = directory.walkTopDown().filter { it.name == "module-info.class" }.toList()
+                    val packageInfo = directory.walkTopDown().filter { it.name == "package-info.class" }.toList()
+
+                    val name = when {
+                        moduleInfo.isNotEmpty() && packageInfo.isNotEmpty() -> "module-info and package-info"
+                        moduleInfo.isNotEmpty() && packageInfo.isEmpty() -> "module-info"
+                        else -> "package-info"
                     }
 
-                    // the SOURCE of the module-info.java file. It uses **EVERYTHING**
-                    task.options.sourcepath = allSource
-                    task.options.compilerArgs.addAll(listOf(
-                        "-implicit:none",
-                        "-Xpkginfo:always",  // compile the package-info.java files as well (normally it does not)
-                        "--module-path", main.compileClasspath.asPath,
-                        "--patch-module", "$moduleName=" + allCompiled.asPath // add our existing, compiled classes so module-info can find them
-                    ))
-                }
-            })
+                    println("\tCopying $name files into the intellij classes location...")
 
-            doLast(object: Action<Task> {
-                override fun execute(task: Task) {
-                    task as JavaCompile
-
-                    val intellijClasses = File("${this@JpmsMultiRelease.project.buildDir}/classes-intellij")
-                    if (intellijClasses.exists()) {
-                        // copy everything to intellij also. FORTUNATELY, we know it's only going to be the `module-info` and `package-info` classes!
-                        val directory = task.destinationDirectory.asFile.get()
-
-                        val moduleInfo = directory.walkTopDown().filter { it.name == "module-info.class" }.toList()
-                        val packageInfo = directory.walkTopDown().filter { it.name == "package-info.class" }.toList()
-
-                        val name = when {
-                            moduleInfo.isNotEmpty() && packageInfo.isNotEmpty() -> "module-info and package-info"
-                            moduleInfo.isNotEmpty() && packageInfo.isEmpty() -> "module-info"
-                            else -> "package-info"
-                        }
-
-                        println("\tCopying $name files into the intellij classes location...")
-
-                        moduleInfo.forEach {
-                            val newLocation = File(intellijClasses, it.relativeTo(directory).path)
-                            it.copyTo(newLocation, overwrite = true)
-                        }
+                    moduleInfo.forEach {
+                        val newLocation = File(intellijClasses, it.relativeTo(directory).path)
+                        it.copyTo(newLocation, overwrite = true)
                     }
                 }
-            })
+            }
         }
 
-        project.tasks.named("jar", Jar::class.java).get().apply {
-            dependsOn(compileModuleInfoX)
+        project.tasks.named<Jar>("jar", Jar::class.java).configure { task ->
+            task.dependsOn(compileModuleInfoX)
 
             // NOTE: This syntax screws up, and the entire contents of the jar are in the wrong place...
             // from(mainX.output.classesDirs) {
             //     exclude("META-INF")
             //     into("META-INF/versions/$ver")
             // }
-            from(mainX.output.classesDirs)
+            task.from(mainX.output.classesDirs)
 
 
             val sourcePaths = mainX.output.classesDirs.map {it.absolutePath}.toSet()
 //            println("SOURCE PATHS+ $sourcePaths")
 
-            doFirst(object: Action<Task> {
-                override fun execute(task: Task) {
-                    task as Jar
+            task.doFirst {
+                // this is how to correctly RE-MAP the location of files in jar
+                task.eachFile { details ->
+                    val absolutePath = details.file.absolutePath
+                    val length = details.path.length + 1
 
-                    // this is how to correctly RE-MAP the location of files in jar
-                    task.eachFile { details ->
-                        val absolutePath = details.file.absolutePath
-                        val length = details.path.length + 1
+                    val sourceDir = absolutePath.substring(0, absolutePath.length - length)
 
-                        val sourceDir = absolutePath.substring(0, absolutePath.length - length)
+                    // println("checking file: $absolutePath")
+                    // println("checking file: $sourceDir")
 
-                        // println("checking file: $absolutePath")
-                        // println("checking file: $sourceDir")
-
-                        if (sourcePaths.contains(sourceDir)) {
-                            // println("Moving: " + absolutePath)
-                            // println("      : " + details.path)
-                            details.path = "META-INF/versions/${ver}/${details.path}"
-                        }
+                    if (sourcePaths.contains(sourceDir)) {
+                        // println("Moving: " + absolutePath)
+                        // println("      : " + details.path)
+                        details.path = "META-INF/versions/${ver}/${details.path}"
                     }
                 }
-            })
+            }
 
             // this is required for making the java 9+ multi-release version possible
-            manifest.attributes["Multi-Release"] = "true"
+            task.manifest.attributes["Multi-Release"] = "true"
         }
     }
 }

@@ -267,7 +267,7 @@ open class StaticMethodsAndTools(val project: Project) {
      */
     fun fixMavenPaths() {
         // it is SUPER annoying to use the opinionated sonatype directory structure. I don't like it. We pass in the "configuration" action
-        // instead of doing it a different way, so the creation AND configuration of these sorucesets can occur. (Otherwise they won't)
+        // instead of doing it a different way, so the creation AND configuration of these sourcesets can occur. (Otherwise they won't)
 
         val sourceSets = project.extensions.getByName("sourceSets") as SourceSetContainer
         val main = sourceSets.named("main", org.gradle.api.tasks.SourceSet::class.java).get()
@@ -283,7 +283,11 @@ open class StaticMethodsAndTools(val project: Project) {
                 val kotlin = project.extensions.getByType(KotlinJvmProjectExtension::class.java).sourceSets.getByName("main").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("src"))
-                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
+
+
+                    // want to include kotlin and java files for the source. 'setSrcDirs' resets includes...
+                    // NOTE: if we DO NOT do this, then there will not be any sources in the "plugin sources" jar, as it expects only java
+                    include("**/*.kt", "**/*.java")
                 }
             } catch (ignored: Exception) {
             }
@@ -301,7 +305,10 @@ open class StaticMethodsAndTools(val project: Project) {
                 val kotlin = project.extensions.getByType(KotlinJvmProjectExtension::class.java).sourceSets.getByName("test").kotlin
                 kotlin.apply {
                     setSrcDirs(project.files("test"))
-                    include("**/*.kt") // want to include kotlin files for the source. 'setSrcDirs' resets includes...
+
+                    // want to include kotlin and java files for the source. 'setSrcDirs' resets includes...
+                    // NOTE: if we DO NOT do this, then there will not be any sources in the "plugin sources" jar, as it expects only java
+                    include("**/*.kt", "**/*.java")
                 }
             } catch (ignored: Exception) {
             }

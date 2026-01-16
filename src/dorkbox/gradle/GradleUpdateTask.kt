@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,26 +16,45 @@
 package dorkbox.gradle
 
 import org.gradle.api.DefaultTask
-import org.gradle.api.tasks.Input
+import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.wrapper.Wrapper
+import org.gradle.api.tasks.wrapper.Wrapper.DistributionType
+import org.gradle.kotlin.dsl.register
 import org.gradle.util.GradleVersion
 import org.json.JSONObject
-import java.net.URL
+import java.io.File
+import java.net.URI
+import java.security.MessageDigest
 
-open class
+abstract class
 GradleUpdateTask : DefaultTask() {
     companion object {
         val releaseText: String by lazy {
-            URL("https://services.gradle.org/versions/current").readText()
+            URI("https://services.gradle.org/versions/current").toURL().readText()
         }
 
         val foundGradleVersion: String? by lazy {
             JSONObject(releaseText)["version"] as String?
         }
+
+        val sha256SumOnline: String by lazy {
+            URI("https://services.gradle.org/distributions/gradle-${foundGradleVersion}-wrapper.jar.sha256").toURL().readText()
+        }
+
+        private fun sha256(file: File): ByteArray {
+            val md = MessageDigest.getInstance("SHA-256")
+            file.forEachBlock { bytes: ByteArray, bytesRead: Int ->
+                md.update(bytes, 0, bytesRead)
+            }
+            return md.digest()
+        }
     }
+
+    @get:Internal
+    abstract val savedProject: Property<Project>
 
     @TaskAction
     fun run() {
@@ -45,25 +64,64 @@ GradleUpdateTask : DefaultTask() {
         else {
             val current = GradleVersion.current().version
 
-            if (current == foundGradleVersion) {
-                println("\tGradle is already latest version '$foundGradleVersion'")
+            val sha256SumLocal = URI("https://services.gradle.org/distributions/gradle-${foundGradleVersion}-wrapper.jar.sha256").toURL().readText()
+
+            // Print wrapper jar location and SHA256 after update
+            val wrapperJar = project.file("gradle/wrapper/gradle-wrapper.jar")
+            println("\tWrapper JAR location: ${wrapperJar.absolutePath}")
+
+            if (wrapperJar.exists()) {
+                val sha256Local = sha256(wrapperJar)
+                val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
+                println("\tUpdated SHA256 sum is '$sha256LocalHex'")
             } else {
+                println("\tWrapper JAR file not found after update!")
+            }
+
+
+//            if (current == foundGradleVersion) {
+                println("\tGradle is already latest version '$foundGradleVersion'")
+
+
+                println("\tOnline  SHA256 sum is '$sha256SumOnline'")
+                println("\tCurrent SHA256 sum is '$sha256SumLocal'")
+
+//            } else {
                 println("\tDetected new Gradle Version: '$foundGradleVersion', updating from '$current'")
 
-                val wrapperUpdate = project.tasks.create("wrapperUpdate", Wrapper::class.java)
+            val tasks = savedProject.get().tasks
 
-                wrapperUpdate.apply {
+
+            val wrapper = tasks.findByName("wrapperUpdate") ?: tasks.register<Wrapper>("wrapperUpdate")
+            tasks.register<Wrapper>("wrapperUpdate") {
                     group = "other"
+
                     outputs.upToDateWhen { false }
                     outputs.cacheIf { false }
 
+                    outputs.files.forEach {
+                        println("${it.path}")
+                    }
+
                     gradleVersion = foundGradleVersion
                     distributionUrl = distributionUrl.replace("bin", "all")
-                    distributionType = Wrapper.DistributionType.ALL
+                    distributionType = DistributionType.ALL
+
+                    doLast {
+                        outputs.files.filter { it.exists() && it.nameWithoutExtension == "gradle-wrapper" }.first().also { file ->
+                            println("${file.path} exists")
+
+                            val sha256Local = sha256(file)
+                            val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
+                            println("\tUpdated SHA256 sum is '$sha256LocalHex'")
+                        }
+                    }
+                }.get().also {
+                    actions.first().execute(this)
                 }
 
-                wrapperUpdate.actions[0].execute(wrapperUpdate)
-            }
+
+//            }
         }
     }
 }

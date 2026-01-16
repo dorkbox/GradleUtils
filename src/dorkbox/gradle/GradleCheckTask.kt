@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 dorkbox, llc
+ * Copyright 2026 dorkbox, llc
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
 import org.gradle.util.GradleVersion
 import org.json.JSONObject
-import java.net.URL
+import java.net.URI
 
 open class
 GradleCheckTask : DefaultTask() {
     companion object {
         val releaseText: String by lazy {
-            URL("https://services.gradle.org/versions/current").readText()
+            URI("https://services.gradle.org/versions/current").toURL().readText()
         }
 
         val foundGradleVersion: String? by lazy {

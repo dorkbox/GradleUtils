@@ -30,7 +30,7 @@ import org.gradle.kotlin.dsl.register
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
-import java.net.URL
+import java.net.URI
 import java.util.jar.*
 import kotlin.reflect.KClass
 
@@ -46,7 +46,10 @@ class GradleUtils : Plugin<Project> {
 
     init {
         // Disable JarURLConnections caching
-        URL("jar:file://dummy.jar!/").openConnection().defaultUseCaches = false
+        try {
+            URI("jar:file://dummy.jar!/").toURL().openConnection().defaultUseCaches = false
+        } catch (_: IOException) {
+        }
     }
 
     override fun apply(project: Project) {
@@ -74,6 +77,8 @@ class GradleUtils : Plugin<Project> {
                 outputs.upToDateWhen { false }
                 outputs.cacheIf { false }
                 description = "Automatically update Gradle to the latest version"
+
+                savedProject.set(project)
             }
 
             project.tasks.register<GradleCheckTask>("checkGradleVersion") {
@@ -389,24 +394,66 @@ fun Project.resolveTestDependencies(): DependencyScanner.ProjectDependencies {
 }
 
 
-// https://www.danilopianini.org
-//       https://github.com/DanySK/publish-on-central
-//       Copyright 2025
-//         Danilo Pianini
+/*
+ * Copyright 2025  Danilo Pianini
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * https://www.danilopianini.org
+ * https://github.com/DanySK/publish-on-central
+ */
 inline fun <reified T : Any> Project.propertyWithDefault(default: T?): Property<T> =
     objects.property<T>().apply { convention(default) }
 
-// https://www.danilopianini.org
-//       https://github.com/DanySK/publish-on-central
-//       Copyright 2025
-//         Danilo Pianini
+/*
+ * Copyright 2025  Danilo Pianini
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * https://www.danilopianini.org
+ * https://github.com/DanySK/publish-on-central
+ */
 inline fun <reified T : Any> Project.propertyWithDefaultProvider(noinline default: () -> T?): Property<T> =
     objects.property<T>().apply { convention(provider(default)) }
 
-// https://www.danilopianini.org
-//       https://github.com/DanySK/publish-on-central
-//       Copyright 2025
-//         Danilo Pianini
+/*
+ * Copyright 2025  Danilo Pianini
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * https://www.danilopianini.org
+ * https://github.com/DanySK/publish-on-central
+ */
 fun <T : Task> Project.registerTaskIfNeeded(
     name: String,
     type: KClass<T>,

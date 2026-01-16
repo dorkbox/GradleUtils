@@ -26,7 +26,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import java.io.InputStreamReader
-import java.net.URL
+import java.net.URI
 import java.util.concurrent.*
 import java.util.concurrent.locks.*
 import kotlin.concurrent.write
@@ -71,7 +71,7 @@ abstract class GetVersionInfoTask : DefaultTask() {
                 val future = httpDispatcher.submit {
                     repositories.forEach { repoUrl ->
                         try {
-                            val url = URL(repoUrl + metadataUrl)
+                            val url = URI(repoUrl + metadataUrl).toURL()
 //println("URL: $url")
 
                             with(url.openConnection() as java.net.HttpURLConnection) {
