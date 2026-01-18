@@ -86,6 +86,7 @@ class GradleUtils : Plugin<Project> {
                 outputs.upToDateWhen { false }
                 outputs.cacheIf { false }
                 description = "Gets both the latest and currently installed Gradle versions"
+                savedProject.set(project)
             }
         }
 

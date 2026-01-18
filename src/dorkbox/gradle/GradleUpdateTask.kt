@@ -15,113 +15,73 @@
  */
 package dorkbox.gradle
 
+import dorkbox.gradle.GradleCheckTask.Companion.GradleVersionStatus
+import dorkbox.gradle.GradleCheckTask.Companion.checkGradleVersions
+import dorkbox.gradle.GradleCheckTask.Companion.currentVersion
+import dorkbox.gradle.GradleCheckTask.Companion.foundGradleVersion
+import dorkbox.gradle.GradleCheckTask.Companion.releaseText
+import dorkbox.gradle.GradleCheckTask.Companion.sha256
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.wrapper.Wrapper
-import org.gradle.api.tasks.wrapper.Wrapper.DistributionType
 import org.gradle.kotlin.dsl.register
-import org.gradle.util.GradleVersion
-import org.json.JSONObject
-import java.io.File
-import java.net.URI
-import java.security.MessageDigest
 
-abstract class
-GradleUpdateTask : DefaultTask() {
+open class GradleUpdateTask : DefaultTask() {
     companion object {
-        val releaseText: String by lazy {
-            URI("https://services.gradle.org/versions/current").toURL().readText()
-        }
-
-        val foundGradleVersion: String? by lazy {
-            JSONObject(releaseText)["version"] as String?
-        }
-
-        val sha256SumOnline: String by lazy {
-            URI("https://services.gradle.org/distributions/gradle-${foundGradleVersion}-wrapper.jar.sha256").toURL().readText()
-        }
-
-        private fun sha256(file: File): ByteArray {
-            val md = MessageDigest.getInstance("SHA-256")
-            file.forEachBlock { bytes: ByteArray, bytesRead: Int ->
-                md.update(bytes, 0, bytesRead)
-            }
-            return md.digest()
-        }
-    }
-
-    @get:Internal
-    abstract val savedProject: Property<Project>
-
-    @TaskAction
-    fun run() {
-        if (foundGradleVersion.isNullOrEmpty()) {
-            println("\tUnable to detect New Gradle Version. Output json: $releaseText")
-        }
-        else {
-            val current = GradleVersion.current().version
-
-            val sha256SumLocal = URI("https://services.gradle.org/distributions/gradle-${foundGradleVersion}-wrapper.jar.sha256").toURL().readText()
-
-            // Print wrapper jar location and SHA256 after update
-            val wrapperJar = project.file("gradle/wrapper/gradle-wrapper.jar")
-            println("\tWrapper JAR location: ${wrapperJar.absolutePath}")
-
-            if (wrapperJar.exists()) {
-                val sha256Local = sha256(wrapperJar)
-                val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
-                println("\tUpdated SHA256 sum is '$sha256LocalHex'")
-            } else {
-                println("\tWrapper JAR file not found after update!")
-            }
-
-
-//            if (current == foundGradleVersion) {
-                println("\tGradle is already latest version '$foundGradleVersion'")
-
-
-                println("\tOnline  SHA256 sum is '$sha256SumOnline'")
-                println("\tCurrent SHA256 sum is '$sha256SumLocal'")
-
-//            } else {
-                println("\tDetected new Gradle Version: '$foundGradleVersion', updating from '$current'")
-
-            val tasks = savedProject.get().tasks
-
-
-            val wrapper = tasks.findByName("wrapperUpdate") ?: tasks.register<Wrapper>("wrapperUpdate")
-            tasks.register<Wrapper>("wrapperUpdate") {
+        fun updateGradleWrapper(project: Project, versionToUse: String) {
+            val tasks = project.tasks
+            var wrapper = tasks.findByName("wrapperUpdate")
+            if (wrapper == null) {
+                wrapper = tasks.register<Wrapper>("wrapperUpdate") {
                     group = "other"
 
                     outputs.upToDateWhen { false }
                     outputs.cacheIf { false }
 
-                    outputs.files.forEach {
-                        println("${it.path}")
-                    }
-
-                    gradleVersion = foundGradleVersion
+                    gradleVersion = versionToUse
                     distributionUrl = distributionUrl.replace("bin", "all")
-                    distributionType = DistributionType.ALL
+                    distributionType = Wrapper.DistributionType.ALL
+                }.get()
+            }
 
-                    doLast {
-                        outputs.files.filter { it.exists() && it.nameWithoutExtension == "gradle-wrapper" }.first().also { file ->
-                            println("${file.path} exists")
+            wrapper.actions.first().execute(wrapper)
 
-                            val sha256Local = sha256(file)
-                            val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
-                            println("\tUpdated SHA256 sum is '$sha256LocalHex'")
-                        }
-                    }
-                }.get().also {
-                    actions.first().execute(this)
-                }
-
-
-//            }
+            wrapper.outputs.files.filter { it.exists() && it.name == "gradle-wrapper.jar" }.first().also { file ->
+//                println("\tTASK: ${file.path} exists")
+                val sha256Local = sha256(file)
+                val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
+                println("\tUpdate $versionToUse SHA256: '$sha256LocalHex'")
+            }
         }
+    }
+
+    @get:Internal
+    val savedProject: Property<Project> = project.objects.property(Project::class.java)
+
+    @TaskAction
+    fun run() {
+        if (foundGradleVersion.isNullOrEmpty()) {
+            println("\tUnable to detect New Gradle Version. Output json: $releaseText")
+            return
+        }
+
+        val state = checkGradleVersions(savedProject.get())
+        if (state == GradleVersionStatus.UP_TO_DATE || state == GradleVersionStatus.NOT_FOUND) {
+            return
+        }
+
+        val versionToUse = if (state == GradleVersionStatus.SHA_MISMATCH) {
+            println("\tReinstalling version $currentVersion")
+            currentVersion
+        }
+        else {
+            println("\tUpdating Gradle Wrapper to v$foundGradleVersion")
+            foundGradleVersion!!
+        }
+
+        updateGradleWrapper(savedProject.get(), versionToUse)
     }
 }
