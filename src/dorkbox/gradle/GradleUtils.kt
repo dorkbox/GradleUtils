@@ -27,7 +27,6 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
-import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.*
 import java.net.URI
@@ -53,12 +52,6 @@ class GradleUtils : Plugin<Project> {
     }
 
     override fun apply(project: Project) {
-        val current = GradleVersion.current()
-        if (current < GradleVersion.version("9.0")) {
-            // we require v7+ of gradle to use this version of the util project.
-            throw GradleException("${project.name}: Gradle ${project.gradle.gradleVersion} requires Gradle 9.0+ to continue.")
-        }
-
         StaticMethodsAndTools.apply(project, "java")
         StaticMethodsAndTools.apply(project, "java-library")
         StaticMethodsAndTools.apply(project, "idea")
