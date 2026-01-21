@@ -73,15 +73,7 @@ open class GradleUpdateTask : DefaultTask() {
             return
         }
 
-        val versionToUse = if (state == GradleVersionStatus.SHA_MISMATCH) {
-            println("\tReinstalling version $currentVersion")
-            currentVersion
-        }
-        else {
-            println("\tUpdating Gradle Wrapper to v$foundGradleVersion")
-            foundGradleVersion!!
-        }
-
-        updateGradleWrapper(savedProject.get(), versionToUse)
+        println("\tUpdating Gradle Wrapper to v$foundGradleVersion")
+        updateGradleWrapper(savedProject.get(), foundGradleVersion!!)
     }
 }
