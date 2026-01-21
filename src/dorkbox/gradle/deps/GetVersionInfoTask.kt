@@ -20,6 +20,7 @@ import dorkbox.gradle.buildScriptRepositoryUrls
 import dorkbox.gradle.getProjectRepositoryUrls
 import dorkbox.gradle.resolveAllDeclaredDependencies
 import dorkbox.gradle.resolveBuildScriptDependencies
+import dorkbox.version.Version
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
@@ -41,9 +42,10 @@ abstract class GetVersionInfoTask : DefaultTask() {
         private fun getLatestVersionInfo(
             repositories: List<String>,
             mergedDeps: MutableMap<DependencyScanner.Maven, MutableSet<DependencyScanner.Maven>>,
-            mergedVersionInfo: MutableMap<DependencyScanner.Maven, VersionHolder> = mutableMapOf(),
+            mergedVersionInfo: MutableMap<DependencyScanner.Maven, VersionHolder>,
             forGradleScripts: Boolean = false,
-        ): Pair<MutableList<Future<*>>, MutableMap<DependencyScanner.Maven, VersionHolder>> {
+        ) {
+            val debug = false
 
             // first get all version information across ALL projects.
             // do this in parallel with coroutines!
@@ -72,14 +74,19 @@ abstract class GetVersionInfoTask : DefaultTask() {
                     repositories.forEach { repoUrl ->
                         try {
                             val url = URI(repoUrl + metadataUrl).toURL()
-//println("URL: $url")
+                            if (debug) {
+                                println("URL: $url")
+                            }
 
                             with(url.openConnection() as java.net.HttpURLConnection) {
                                 var inVersioningSection = false
                                 val inputStreamReader = InputStreamReader(inputStream)
                                 inputStreamReader.readLines().forEach { line ->
                                     val trimmed = line.trim()
-//println("Reading: $line")
+                                    if (debug) {
+                                        println("Reading: $trimmed")
+                                    }
+
                                     if (!inVersioningSection) {
                                         if (trimmed == "<versioning>") {
                                             inVersioningSection = true
@@ -94,7 +101,9 @@ abstract class GetVersionInfoTask : DefaultTask() {
                                         val matchResult = releaseMatcher.find(trimmed)
                                         if (matchResult != null) {
                                             val (_, ver, _) = matchResult.destructured
-//println("Release: ${mergedDep.group}:${mergedDep.name} $ver")
+                                            if (debug) {
+                                                println("\tRelease: ${mergedDep.group}:${mergedDep.name}:$ver")
+                                            }
                                             downloadLock.write {
                                                 mergedVersionInfo[mavenIdKey]!!.updateReleaseVersion(ver)
                                             }
@@ -110,7 +119,9 @@ abstract class GetVersionInfoTask : DefaultTask() {
 
                                             downloadLock.write {
                                                 versions.forEach { ver ->
-//println("Version: ${mergedDep.group}:${mergedDep.name} $ver")
+                                                    if (debug) {
+                                                        println("\tVersion: ${mergedDep.group}:${mergedDep.name}:$ver")
+                                                    }
                                                     mergedVersionInfo[mavenIdKey]!!.addVersion(ver)
                                                 }
                                             }
@@ -126,12 +137,55 @@ abstract class GetVersionInfoTask : DefaultTask() {
                 futures.add(future)
             }
 
-            downloadLock.write {
-//                mergedVersionInfo.forEach { t, u ->
-//                    println("$t :: ${u.versions}")
-//                }
+            // wait for all the downloading to complete
+            futures.forEach {
+                it.get()
+            }
 
-                return Pair(futures, mergedVersionInfo)
+            if (debug) {
+                downloadLock.write {
+                    mergedVersionInfo.forEach { (t, u) ->
+                        println("$t :: ${u.versions}")
+                    }
+                }
+            }
+        }
+
+        private fun List<Pair<DependencyScanner.Maven, VersionHolder>>.filterStable(): List<Pair<DependencyScanner.Maven, VersionHolder>> {
+            return filter { (dep, versionHolder) ->
+                versionHolder.release != null
+            }.filter { (dep, versionHolder) ->
+                val newestStableVersion = versionHolder.versions.lastOrNull {
+                    val ver = Version(it)
+                    ver.buildMetadata.isEmpty() && ver.preReleaseVersion.isEmpty()
+                } ?: versionHolder.release
+
+                dep.version == newestStableVersion
+            }
+        }
+
+
+        private fun List<Pair<DependencyScanner.Maven, VersionHolder>>.printAlignedText(
+            key: String,
+            function: (DependencyScanner.Maven, VersionHolder) -> String
+        ) {
+            val text = this.map { (dep, versionHolder) ->
+                function(dep, versionHolder)
+            }
+
+            val max = text.maxOfOrNull { s ->
+                s.indexOf(key, 0)
+            } ?: 0
+
+            text.forEach { s ->
+                val index = s.indexOf(key, 0)
+                var spacer = ""
+                var offset = max - index
+                while (offset > 0) {
+                    offset--
+                    spacer += " "
+                }
+                println(s.replace(key, "$spacer$key"))
             }
         }
 
@@ -152,19 +206,17 @@ abstract class GetVersionInfoTask : DefaultTask() {
                 deps.add(dep)
             }
 
+            val versionHolders = mutableMapOf<DependencyScanner.Maven, VersionHolder>()
+
             // for script dependencies, ALWAYS add the gradle plugin repo!
             // (we hardcode the value, this is not likely to change, but easy enough to fix if it does...)
-            val (futures, versionHolders) = getLatestVersionInfo(listOf(GRADLE_PLUGIN_REPO), mergedDeps, forGradleScripts = true)
-            val (futures2, _) = getLatestVersionInfo(repositories, mergedDeps, versionHolders)
+            val futures = getLatestVersionInfo(listOf(GRADLE_PLUGIN_REPO), mergedDeps, versionHolders, forGradleScripts = true)
+            val futures2 = getLatestVersionInfo(repositories, mergedDeps, versionHolders)
+
 
             if (mergedDeps.isNotEmpty()) {
                 // suppress duplicate messages when initially parsing gradle scripts (since it's a redundant message )
                 println("\tGetting version data for ${mergedDeps.size} dependencies...")
-            }
-
-            (futures + futures2).forEach {
-                // wait for all of them to finish
-                it.get()
             }
 
 //            versionHolders.forEach { (t, u) ->
@@ -181,7 +233,9 @@ abstract class GetVersionInfoTask : DefaultTask() {
                         if (dep.version == versionHolder.release) {
                             latestVersionInfo.add(dep)
                         } else {
-                            oldVersionInfo.add(Pair(dep, versionHolder))
+                            if (!dep.group.startsWith("org.jetbrains")) {
+                                oldVersionInfo.add(Pair(dep, versionHolder))
+                            }
                         }
                     }
                 }
@@ -205,13 +259,30 @@ abstract class GetVersionInfoTask : DefaultTask() {
                     if (hasLatest) {
                         println()
                     }
-                    println("\tThe following build script dependencies need updates:")
 
-                    oldVersionInfo.forEach { (dep, versionHolder) ->
-                        // list release version AND all other versions greater than my version
+                    val oldStableVersion = oldVersionInfo.filterStable()
 
-                        // BUILD SCRIPT DEPS HAVE FUNNY NOTATION!
-                        println("\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}")
+                    val actuallyOld = oldVersionInfo.minus(oldStableVersion.toSet())
+                    if (actuallyOld.isNotEmpty()) {
+                        println("\tThe following build script dependencies need updates:")
+
+                        actuallyOld.printAlignedText("[") { dep, versionHolder ->
+                            // list release version AND all other versions greater than my version
+                            "\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                        }
+                    }
+
+
+                    if (oldStableVersion.isNotEmpty()) {
+                        if (actuallyOld.isNotEmpty()) {
+                            println()
+                        }
+                        println("\tThe following build script dependencies have risky updates:")
+
+                        // now align text
+                        oldStableVersion.printAlignedText("[") { dep, versionHolder ->
+                            "\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                        }
                     }
                 }
 
@@ -246,19 +317,15 @@ abstract class GetVersionInfoTask : DefaultTask() {
                 mergedRepos.addAll(subProject.getProjectRepositoryUrls())
             }
 
+            val versionHolders = mutableMapOf<DependencyScanner.Maven, VersionHolder>()
 
             // first get all version information across ALL projects.
-            val (futures, versionHolders) = getLatestVersionInfo(mergedRepos.toList(), mergedDeps)
+            getLatestVersionInfo(mergedRepos.toList(), mergedDeps, versionHolders)
+
             if (mergedDeps.isNotEmpty()) {
                 // suppress duplicate messages when initially parsing gradle scripts (since it's a redundant message )
                 println("\tGetting version data for ${mergedDeps.size} dependencies...")
             }
-
-            futures.forEach {
-                // wait for all of them to finish
-                it.get()
-            }
-
 
 
             val latestVersionInfo = mutableListOf<DependencyScanner.Maven>()
@@ -324,11 +391,31 @@ abstract class GetVersionInfoTask : DefaultTask() {
                         if (hasLatest) {
                             println()
                         }
-                        println("\tThe following project$projectName dependencies need updates:")
 
-                        oldVersionInfo.forEach { (dep, versionHolder) ->
-                            // list release version AND all other versions greater than my version
-                            println("\t - ${dep.group}:${dep.name}:${dep.version} ${versionHolder.toVersionString(dep)}")
+                        val oldStableVersion = oldVersionInfo.filterStable()
+
+                        val actuallyOld = oldVersionInfo.minus(oldStableVersion.toSet())
+                        if (actuallyOld.isNotEmpty()) {
+                            println("\tThe following project$projectName dependencies need updates:")
+
+                            actuallyOld.printAlignedText("[") { dep, versionHolder ->
+                                // list release version AND all other versions greater than my version
+                                "\t - ${dep.group}:${dep.name}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                            }
+                        }
+
+
+
+                        if (oldStableVersion.isNotEmpty()) {
+                            if (actuallyOld.isNotEmpty()) {
+                                println()
+                            }
+                            println("\tThe following project$projectName dependencies have risky updates:")
+
+                            // now align text
+                            oldStableVersion.printAlignedText("[") { dep, versionHolder ->
+                                "\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                            }
                         }
                     }
 
@@ -351,12 +438,13 @@ abstract class GetVersionInfoTask : DefaultTask() {
 
     @TaskAction
     fun run() {
-        scriptDependencies(savedProject.get())
+        val get = savedProject.get()
+        scriptDependencies(get)
 
         println()
         println()
         println()
 
-        projectDependencies(savedProject.get())
+        projectDependencies(get)
     }
 }

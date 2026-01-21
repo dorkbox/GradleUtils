@@ -97,27 +97,29 @@ data class VersionHolder(var release: String?, val versions: MutableSet<String>)
 
 
     fun toVersionString(dep: DependencyScanner.Maven): String {
-        var textRelease = release
-        if (release != null && Version(release!!).let { it.buildMetadata.isNotEmpty() || it.preReleaseVersion.isNotEmpty() } ) {
-            textRelease = versions.lastOrNull {
-                val ver = Version(it)
-                ver.buildMetadata.isEmpty() && ver.preReleaseVersion.isEmpty()
-            } ?: release
-        }
+        val newestStableVersion = versions.lastOrNull {
+            val ver = Version(it)
+            ver.buildMetadata.isEmpty() && ver.preReleaseVersion.isEmpty()
+        } ?: release
 
-        if (textRelease == dep.version) {
-            textRelease = " "
+        val spacer = if (newestStableVersion == dep.version) {
+            "   "
         } else {
-            textRelease = "-> $textRelease  "
+            "-> "
         }
 
 
 
-        val possibleVersionChoices = getVersionOptions(dep.version)
-        return if (possibleVersionChoices.size > 1) {
-            "$textRelease$possibleVersionChoices"
-        } else {
-            textRelease
+        val limit = 3
+        val possibleVersionChoices = getVersionOptions(dep.version).asReversed()
+        return if (possibleVersionChoices.size > limit) {
+            "$spacer${possibleVersionChoices.take(limit) + "..." + possibleVersionChoices.drop(limit).takeLast(limit)}".replace(", ...,", " ...")
+        }
+        else if (possibleVersionChoices.isNotEmpty()) {
+            "$spacer$possibleVersionChoices"
+        }
+        else {
+            spacer
         }
 //      println("\t - ${dep.group}:${dep.version} -> ${versionHolder.versions}")
     }
