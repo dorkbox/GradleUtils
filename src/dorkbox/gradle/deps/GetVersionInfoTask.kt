@@ -403,7 +403,7 @@ abstract class GetVersionInfoTask : DefaultTask() {
 
                             actuallyOld.printAlignedText("[") { dep, versionHolder ->
                                 // list release version AND all other versions greater than my version
-                                "\t - ${dep.group}:${dep.name}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                                "\t - ${dep.id} ${versionHolder.toVersionString(dep)}"
                             }
                         }
 
@@ -417,7 +417,7 @@ abstract class GetVersionInfoTask : DefaultTask() {
 
                             // now align text
                             oldStableVersion.printAlignedText("[") { dep, versionHolder ->
-                                "\t - ${dep.group}:${dep.version} ${versionHolder.toVersionString(dep)}"
+                                "\t - ${dep.id} ${versionHolder.toVersionString(dep)}"
                             }
                         }
                     }
