@@ -19,6 +19,8 @@ package dorkbox.gradle
 
 import dorkbox.gradle.deps.DependencyScanner
 import dorkbox.gradle.deps.GetVersionInfoTask
+import dorkbox.gradle.wrapper.GradleCheckTask
+import dorkbox.gradle.wrapper.GradleUpdateTask
 import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.java.archives.Manifest
@@ -65,22 +67,8 @@ class GradleUtils : Plugin<Project> {
         // when trying to apply to the sub-projects.
 
         if (project == project.rootProject) {
-            project.tasks.register<GradleUpdateTask>("updateGradleWrapper") {
-                group = "gradle"
-                outputs.upToDateWhen { false }
-                outputs.cacheIf { false }
-                description = "Automatically update Gradle to the latest version"
-
-                savedProject.set(project)
-            }
-
-            project.tasks.register<GradleCheckTask>("checkGradleVersion") {
-                group = "gradle"
-                outputs.upToDateWhen { false }
-                outputs.cacheIf { false }
-                description = "Gets both the latest and currently installed Gradle versions"
-                savedProject.set(project)
-            }
+            project.tasks.register<GradleUpdateTask>("updateGradleWrapper")
+            project.tasks.register<GradleCheckTask>("checkGradleVersion")
         }
 
         project.tasks.register<GetVersionInfoTask>("checkDependencies") {
