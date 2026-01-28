@@ -161,6 +161,9 @@ abstract class GetVersionInfoTask : DefaultTask() {
                 } ?: versionHolder.release
 
                 dep.version == newestStableVersion
+            }.distinctBy { (dep, _) ->
+                // Remove duplicates based on group:name:version
+                "${dep.group}:${dep.name}:${dep.version}"
             }
         }
 
@@ -394,7 +397,7 @@ abstract class GetVersionInfoTask : DefaultTask() {
 
                         val oldStableVersion = oldVersionInfo.filterStable()
 
-                        val actuallyOld = oldVersionInfo.minus(oldStableVersion.toSet())
+                        val actuallyOld = oldVersionInfo.minus(oldStableVersion)
                         if (actuallyOld.isNotEmpty()) {
                             println("\tThe following project$projectName dependencies need updates:")
 
