@@ -15,6 +15,7 @@
  */
 package dorkbox.gradle.wrapper
 
+import dorkbox.gradle.wrapper.Wrapper.Companion.Status
 import org.gradle.api.tasks.TaskAction
 
 abstract class GradleUpdateTask : Wrapper() {
@@ -26,25 +27,19 @@ abstract class GradleUpdateTask : Wrapper() {
     }
 
     @TaskAction
-    override fun generate() {
-        if (remoteCurrentGradleVersion.isNullOrEmpty()) {
-            println("\tUnable to detect New Gradle Version. Output json: $releaseText")
-            return
-        }
-
+    fun run() {
         val state = checkGradleVersions()
-        if (state == Companion.Status.UP_TO_DATE || state == Companion.Status.NOT_FOUND) {
+        if (state == Status.UP_TO_DATE || state == Status.NOT_FOUND) {
             return
         }
 
-        println("\tUpdating Gradle Wrapper to v${remoteCurrentGradleVersion}")
+        if (state == Status.NEW_VERSION_AVAILABLE) {
+            println("\tUpdating Gradle Wrapper to v${remoteCurrentGradleVersion}")
+        }
 
         gradleVersion = remoteCurrentGradleVersion!!
 
-        super.generate()
-
-        val sha256Local = sha256(jarFile)
-        val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
-        println("\tUpdate $gradleVersion SHA256: '$sha256LocalHex'")
+        generateWrapper()
+        outputJarSha256()
     }
 }

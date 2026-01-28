@@ -206,7 +206,7 @@ abstract class Wrapper : DefaultTask() {
 
 
 
-    open fun generate() {
+    fun generateWrapper() {
         val resolver = this.fileLookup!!.getFileResolver(scriptFile.parentFile)
         val jarFileRelativePath = resolver.resolveAsRelativePath(jarFile)
 
@@ -301,24 +301,27 @@ abstract class Wrapper : DefaultTask() {
             sha256LocalHex = ""
         }
 
-        if (currentVersion == remoteCurrentGradleVersion && currentSha256Sum == sha256LocalHex) {
-            println("\tGradle is already latest version '$remoteCurrentGradleVersion' and has valid SHA256")
-            return Status.UP_TO_DATE
+        if (currentVersion == remoteCurrentGradleVersion) {
+            if (currentSha256Sum == sha256LocalHex) {
+                println("\tGradle is already at the latest version '$remoteCurrentGradleVersion' and has valid SHA256")
+                return Status.UP_TO_DATE
+            } else {
+                println("\tSHA256 is invalid. Reinstalling Gradle Wrapper to v${gradleVersion}")
+                println("\tLocal  v$gradleVersion SHA256: '$sha256LocalHex'")
+                println("\tRemote v$gradleVersion SHA256: '$currentSha256Sum'")
+                return Status.SHA_MISMATCH
+            }
         }
 
-        if (currentSha256Sum != sha256LocalHex) {
-            println("\tGradle v$remoteCurrentGradleVersion SHA256 sums do not match!")
-            println("\tLocal  v$remoteCurrentGradleVersion SHA256: '$sha256LocalHex'")
-            println("\tRemote v$remoteCurrentGradleVersion SHA256: '$currentSha256Sum'")
-            return Status.SHA_MISMATCH
-        }
-        else {
-            println("\tDetected new Gradle Version: '$remoteCurrentGradleVersion'")
-            return Status.NEW_VERSION_AVAILABLE
-        }
+        println("\tDetected new Gradle Version: '$remoteCurrentGradleVersion'")
+        return Status.NEW_VERSION_AVAILABLE
     }
 
-
+    fun outputJarSha256() {
+        val sha256Local = sha256(jarFile)
+        val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
+        println("\tGradle v$gradleVersion SHA256: '$sha256LocalHex'")
+    }
 
     companion object {
         private fun getDistributionUri(uriRoot: File, url: String): URI {

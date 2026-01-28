@@ -15,6 +15,7 @@
  */
 package dorkbox.gradle.wrapper
 
+import dorkbox.gradle.wrapper.Wrapper.Companion.Status
 import org.gradle.api.tasks.TaskAction
 
 abstract class GradleCheckTask : Wrapper() {
@@ -26,16 +27,11 @@ abstract class GradleCheckTask : Wrapper() {
     }
 
     @TaskAction
-    override fun generate() {
+    fun run() {
         val state = checkGradleVersions()
-        if (state == Companion.Status.SHA_MISMATCH) {
-            println("\tReinstalling Gradle Wrapper to v${gradleVersion}")
-
-            super.generate()
-
-            val sha256Local = sha256(jarFile)
-            val sha256LocalHex = sha256Local.joinToString("") { "%02x".format(it) }
-            println("\tUpdate $gradleVersion SHA256: '$sha256LocalHex'")
+        if (state == Status.SHA_MISMATCH) {
+            generateWrapper()
+            outputJarSha256()
         }
     }
 }
