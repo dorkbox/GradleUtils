@@ -303,7 +303,7 @@ abstract class Wrapper : DefaultTask() {
 
         if (currentVersion == remoteCurrentGradleVersion) {
             if (currentSha256Sum == sha256LocalHex) {
-                println("\tGradle is already at the latest version '$remoteCurrentGradleVersion' and has valid SHA256")
+                println("\tGradle is already at the latest version '$remoteCurrentGradleVersion' and has a valid SHA256")
                 return Status.UP_TO_DATE
             } else {
                 println("\tSHA256 is invalid. Reinstalling Gradle Wrapper to v${gradleVersion}")
