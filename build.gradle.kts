@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//todo: when updating dependencies, also mark the dependeices that DO NOT exist (because of version problem,etc). also - only show stable tags for deps (instead of all tags)
+
 gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS   // always show the stacktrace!
 
 plugins {
@@ -24,7 +24,7 @@ plugins {
 
     id("com.dorkbox.GradleUtils") version "4.4"
     id("com.dorkbox.Licensing") version "3.1"
-    id("com.dorkbox.VersionUpdate") version "3.0"
+    id("com.dorkbox.VersionUpdate") version "3.1"
 
     kotlin("jvm") version "2.3.0"
 }
@@ -33,7 +33,7 @@ object Extras {
     // set for the project
     const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
     const val group = "com.dorkbox"
-    const val version = "4.4"
+    const val version = "4.5"
 
     // set as project.ext
     const val name = "Gradle Utils"
@@ -79,13 +79,13 @@ dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin")
 
     // for easier OS identification
-    implementation("com.dorkbox:OS:1.11")
+    implementation("com.dorkbox:OS:2.0")
 
     // for parsing JSON when updating gradle
     implementation("org.json:json:20251224")
 
     // for parsing version information from maven
-    implementation("com.dorkbox:Version:3.1")
+    implementation("com.dorkbox:Version:3.2")
 }
 
 tasks.jar.get().apply {
