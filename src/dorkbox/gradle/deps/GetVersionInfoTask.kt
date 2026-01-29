@@ -20,7 +20,6 @@ import dorkbox.gradle.buildScriptRepositoryUrls
 import dorkbox.gradle.getProjectRepositoryUrls
 import dorkbox.gradle.resolveAllDeclaredDependencies
 import dorkbox.gradle.resolveBuildScriptDependencies
-import dorkbox.version.Version
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
@@ -155,11 +154,7 @@ abstract class GetVersionInfoTask : DefaultTask() {
             return filter { (dep, versionHolder) ->
                 versionHolder.release != null
             }.filter { (dep, versionHolder) ->
-                val newestStableVersion = versionHolder.versions.lastOrNull {
-                    val ver = Version(it)
-                    ver.buildMetadata.isEmpty() && ver.preReleaseVersion.isEmpty()
-                } ?: versionHolder.release
-
+                val newestStableVersion = versionHolder.latestStableVersion()
                 dep.version == newestStableVersion
             }.distinctBy { (dep, _) ->
                 // Remove duplicates based on group:name:version
