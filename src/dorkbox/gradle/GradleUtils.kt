@@ -45,12 +45,46 @@ import kotlin.reflect.KClass
 class GradleUtils : Plugin<Project> {
     private lateinit var propertyMappingExtension: StaticMethodsAndTools
 
+    companion object {
+        // version
+        private val buildText = """version""".toRegex()
+
+        // VALID (because of different ways to assign values, we want to be explicit)
+        // version = "1.0.0"
+        // const val version = '1.0.0'
+        // project.version = "1.0.0"
+        private val buildFileVersionString = """^\s*\b(?:const val version|project\.version|version)\b\s*=\s*(['"])((?=.*\d)[\w.+-]*)(['"])$""".toRegex()
+    }
+
     init {
-        // Disable JarURLConnections caching
         try {
+            // Disable JarURLConnections caching. some JVMs don't have this
             URI("jar:file://dummy.jar!/").toURL().openConnection().defaultUseCaches = false
         } catch (_: IOException) {
         }
+    }
+
+    typealias FoundFunc = (String, String, File, Int) -> Unit
+
+    fun Project.getVersionFromBuildFile(): String {
+        // get version info by file parsing from gradle.build file
+        buildFile.useLines { lines ->
+            lines.forEach { line ->
+                val trimmedLine = line.trim()
+
+                if (line.contains(buildText)) {
+                    val matchResult = buildFileVersionString.find(trimmedLine)
+                    if (matchResult != null) {
+                        try {
+                            val (_, ver, _) = matchResult.destructured
+                            return ver
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+            }
+        }
+        return ""
     }
 
     override fun apply(project: Project) {
@@ -58,9 +92,11 @@ class GradleUtils : Plugin<Project> {
         StaticMethodsAndTools.apply(project, "java-library")
         StaticMethodsAndTools.apply(project, "idea")
 
-        println("\t${project.name}: Gradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
+        println("\t${project.name} ${project.getVersionFromBuildFile()}")
+        println("\tGradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
+        val manifest = project.extensions.create("manifest", dorkbox.gradle.Manifest::class.java, project)
 
         // do absolutely NOTHING if we are not the root project.
         // the gradle wrapper CAN ONLY be applied to the ROOT project (in a multi-project build), otherwise it will FAIL
