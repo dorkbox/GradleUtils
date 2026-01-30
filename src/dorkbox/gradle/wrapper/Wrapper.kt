@@ -100,8 +100,9 @@ abstract class Wrapper : DefaultTask() {
     @Input
     var distributionPath: String = "wrapper/dists"
 
+    // the wrapper should live in the users home dir, NOT in the project dir!
     @Input
-    var distributionBase: PathBase = PathBase.PROJECT
+    var distributionBase: PathBase = PathBase.GRADLE_USER_HOME
 
 
     /**
