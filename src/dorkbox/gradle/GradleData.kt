@@ -17,17 +17,40 @@
 package dorkbox.gradle
 
 class GradleData {
-    var description: String = ""
     var group: String = ""
-    var version: String = "1.0"
-    var name: String = ""
     var id: String = ""
-    var vendor: String = ""
-    var url: String = ""
-    var tags: List<String> = emptyList()
-
-
     val groupAndId: String
         get() = "${group}.${id}"
 
+
+    var description: String = ""
+    var name: String = ""
+
+    var version: String = "1.0"
+
+    var vendor: String = ""
+    var vendorUrl: String = ""
+
+    var url: String = ""
+
+    val issueManagement: IssueManagement = IssueManagement()
+    fun issueManagement(action: IssueManagement.() -> Unit) {
+        action(issueManagement)
+    }
+
+    var developer: Developer = Developer()
+    fun developer(action: Developer.() -> Unit) {
+        action(developer)
+    }
+}
+
+class IssueManagement() {
+    var nickname = ""
+    var url = ""
+}
+
+class Developer {
+    var id = ""
+    var name = ""
+    var email = ""
 }
