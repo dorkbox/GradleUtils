@@ -22,30 +22,25 @@ plugins {
 
     id("com.gradle.plugin-publish") version "2.0.0"
 
-    id("com.dorkbox.GradleUtils") version "4.4"
+    id("com.dorkbox.GradleUtils") version "4.7.3"
     id("com.dorkbox.Licensing") version "3.1"
     id("com.dorkbox.VersionUpdate") version "3.1"
 
     kotlin("jvm") version "2.3.0"
 }
 
-object Extras {
-    // set for the project
-    const val description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
-    const val group = "com.dorkbox"
-    const val version = "4.7.2"
-
-    // set as project.ext
-    const val name = "Gradle Utils"
-    const val id = "GradleUtils"
-    const val vendor = "Dorkbox LLC"
-    const val url = "https://git.dorkbox.com/dorkbox/GradleUtils"
-}
-
 ///////////////////////////////
 /////  assign 'Extras'
 ///////////////////////////////
-GradleUtils.load("$projectDir/../../gradle.properties", Extras)
+GradleUtils.load {
+    group = "com.dorkbox"
+    id = "GradleUtils"
+    description = "Gradle Plugin to manage various Gradle tasks, such as updating gradle and dependencies"
+    name = "Gradle Utils"
+    version = "4.8"
+    vendor = "Dorkbox LLC"
+    url = "https://git.dorkbox.com/dorkbox/GradleUtils"
+}
 GradleUtils.defaults()
 GradleUtils.compileConfiguration(JavaVersion.VERSION_25)
 
@@ -88,22 +83,6 @@ dependencies {
     implementation("com.dorkbox:Version:3.2")
 }
 
-tasks.jar.get().apply {
-    manifest {
-        // https://docs.oracle.com/javase/tutorial/deployment/jar/packageman.html
-        attributes["Name"] = Extras.name
-
-        attributes["Specification-Title"] = Extras.name
-        attributes["Specification-Version"] = Extras.version
-        attributes["Specification-Vendor"] = Extras.vendor
-
-        attributes["Implementation-Title"] = "${Extras.group}.${Extras.id}"
-        attributes["Implementation-Version"] = GradleUtils.now()
-        attributes["Implementation-Vendor"] = Extras.vendor
-    }
-}
-
-
 /////////////////////////////////
 ////////    Plugin Publishing + Release
 /////////////////////////////////
@@ -113,12 +92,12 @@ gradlePlugin {
 
     plugins {
         register("GradlePublish") {
-            id = "${Extras.group}.${Extras.id}"
+            id = Extras.groupAndId
             implementationClass = "dorkbox.gradle.GradleUtils"
             displayName = Extras.name
             description = Extras.description
-            tags.set(listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management"))
             version = Extras.version
+            tags.set(listOf("build", "jpms", "utilities", "update", "dependencies", "dependency management"))
         }
     }
 }
