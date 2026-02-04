@@ -24,6 +24,7 @@ import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.tasks.Jar
 import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -107,6 +108,10 @@ open class StaticMethodsAndTools(val project: Project) {
         hasKotlin(project, debug)
     }
 
+    var data = GradleData()
+        private set
+
+
     /**
      * Get the time now as a string. This is to reduce the import requirements in a gradle build file
      */
@@ -142,6 +147,45 @@ open class StaticMethodsAndTools(val project: Project) {
         }
     }
 
+
+    /**
+     * Maps the property (key/value) pairs the FIRST property file in the path hierarchy onto the specified target object. Also maps fields in the targetObject to the
+     * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
+     */
+    fun load(defaultData: GradleData.() -> Unit) {
+        // NOTE: the property file in the project directory is ALREADY loaded/read, so it doesn't make sense to parse/load it again.
+        //  for security, the "automatic" loading is only the first one found. Multiple can be loaded, but they must be explicit
+        val propertyName = "gradle.properties"
+
+        var currentDir = project.projectDir.absoluteFile.parentFile.parentFile
+        while (currentDir != null) {
+            val currentFile = currentDir.resolve(propertyName)
+            if (currentFile.canRead()) {
+                load(currentFile.absolutePath, data, defaultData)
+
+                return
+            }
+            currentDir = currentDir.parentFile
+        }
+    }
+
+    /**
+     * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
+     * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
+     */
+    fun load(propertyFile: String, defaultData: GradleData.() -> Unit) {
+        load(propertyFile, data, defaultData)
+    }
+
+    /**
+     * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
+     * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
+     */
+    fun load(propertyFile: String, data: GradleData, defaultData: GradleData.() -> Unit) {
+        defaultData(data)
+        load(propertyFile, data)
+    }
+
     /**
      * Maps the property (key/value) pairs of a property file onto the specified target object. Also maps fields in the targetObject to the
      * project, if they have the same name relationship (ie: field name is "version", project method is "setVersion")
@@ -151,7 +195,7 @@ open class StaticMethodsAndTools(val project: Project) {
 
         val propsFile = File(propertyFile).normalize()
         if (propsFile.canRead()) {
-            println("\tLoading custom property data from: [$propsFile]")
+            println("\tLoading custom property from: [$propsFile]")
 
             val props = Properties()
             propsFile.inputStream().use {
@@ -213,7 +257,7 @@ open class StaticMethodsAndTools(val project: Project) {
                     if (getter.property.isConst) {
                         projectMethod.call(project, getter.call())
                     } else {
-                        projectMethod.call(project, getter.call(kClass.objectInstance))
+                        projectMethod.call(project, getter.call(targetObject))
                     }
                 }
             }
@@ -251,6 +295,26 @@ open class StaticMethodsAndTools(val project: Project) {
         defaultCompileOptions()
         fixIntellijPaths()
     }
+
+    fun defaultManifest() {
+        val jar = (project.tasks.named("jar").get() as Jar)
+        jar.doFirst {
+            it as Jar
+            it.manifest { manifest ->
+                val attributes = manifest.attributes
+
+                // https://docs.oracle.com/javase/tutorial/deployment/jar/packageman.html
+                attributes["Name"] = data.name
+                attributes["Specification-Title"] = data.name
+                attributes["Specification-Version"] = data.version
+                attributes["Specification-Vendor"] = data.vendor
+                attributes["Implementation-Title"] = data.groupAndId
+                attributes["Implementation-Version"] = now()
+                attributes["Implementation-Vendor"] = data.vendor
+            }
+        }
+    }
+
 
     /**
      * Adds maven-local + maven-central repositories

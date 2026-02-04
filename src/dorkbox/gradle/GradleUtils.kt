@@ -23,10 +23,8 @@ import dorkbox.gradle.wrapper.GradleCheckTask
 import dorkbox.gradle.wrapper.GradleUpdateTask
 import org.gradle.api.*
 import org.gradle.api.file.SourceDirectorySet
-import org.gradle.api.java.archives.Manifest
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.TaskProvider
-import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
@@ -64,8 +62,6 @@ class GradleUtils : Plugin<Project> {
         }
     }
 
-    typealias FoundFunc = (String, String, File, Int) -> Unit
-
     fun Project.getVersionFromBuildFile(): String {
         // get version info by file parsing from gradle.build file
         buildFile.useLines { lines ->
@@ -96,7 +92,9 @@ class GradleUtils : Plugin<Project> {
         println("\tGradle ${project.gradle.gradleVersion}, Java ${JavaVersion.current()}")
 
         propertyMappingExtension = project.extensions.create("GradleUtils", StaticMethodsAndTools::class.java, project)
-        val manifest = project.extensions.create("manifest", dorkbox.gradle.Manifest::class.java, project)
+
+        project.extensions.create("manifest", Manifest::class.java, project)
+        project.extensions.create("Extras", Extras::class.java, project)
 
         // do absolutely NOTHING if we are not the root project.
         // the gradle wrapper CAN ONLY be applied to the ROOT project (in a multi-project build), otherwise it will FAIL
@@ -218,24 +216,6 @@ fun JarFile.addFilesToJar(filesToAdd: List<Pair<File, String>>) {
     }
 }
 
-
-/**
- * Make sure that the creation of manifests happens AFTER task configuration, but before task execution.
- *
- * There are dependency issues if the manifest is configured during task configuration.
- *
- * These are NOT lambda's because of issues with gradle.
- */
-fun Jar.safeManifest(action: Action<in Manifest>) {
-    val task = this
-
-    task.doFirst(Action { task ->
-        task as Jar
-
-        task.manifest(Action { t ->
-            action.execute(t) })
-    })
-}
 
 /**
  * Gets all the Maven-style Repository URLs for the specified project (or for the root project if not specified).
